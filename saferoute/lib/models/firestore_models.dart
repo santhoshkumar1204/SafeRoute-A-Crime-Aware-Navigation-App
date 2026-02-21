@@ -7,6 +7,8 @@ class FirestoreUser {
   final String email;
   final String? profilePhoto;
   final String role;
+  final String provider;       // 'email' | 'google'
+  final bool emailVerified;
   final DateTime createdAt;
   final DateTime lastLogin;
 
@@ -16,6 +18,8 @@ class FirestoreUser {
     required this.email,
     this.profilePhoto,
     this.role = 'User',
+    this.provider = 'email',
+    this.emailVerified = false,
     required this.createdAt,
     required this.lastLogin,
   });
@@ -28,6 +32,8 @@ class FirestoreUser {
       email: data['email'] as String? ?? '',
       profilePhoto: data['profilePhoto'] as String?,
       role: data['role'] as String? ?? 'User',
+      provider: data['provider'] as String? ?? 'email',
+      emailVerified: data['emailVerified'] as bool? ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastLogin: (data['lastLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -38,6 +44,8 @@ class FirestoreUser {
         'email': email,
         'profilePhoto': profilePhoto,
         'role': role,
+        'provider': provider,
+        'emailVerified': emailVerified,
         'createdAt': Timestamp.fromDate(createdAt),
         'lastLogin': Timestamp.fromDate(lastLogin),
       };
@@ -48,6 +56,8 @@ class FirestoreUser {
     String? email,
     String? profilePhoto,
     String? role,
+    String? provider,
+    bool? emailVerified,
     DateTime? createdAt,
     DateTime? lastLogin,
   }) {
@@ -57,6 +67,8 @@ class FirestoreUser {
       email: email ?? this.email,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       role: role ?? this.role,
+      provider: provider ?? this.provider,
+      emailVerified: emailVerified ?? this.emailVerified,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
     );

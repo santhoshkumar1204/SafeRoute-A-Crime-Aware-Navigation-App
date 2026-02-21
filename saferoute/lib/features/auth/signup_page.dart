@@ -51,8 +51,11 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           _passwordController.text,
           _role,
         );
-    if (mounted && ref.read(authProvider).isAuthenticated) {
-      context.go('/dashboard');
+    // After signup(), OTP has been sent. Navigate to OTP verification page.
+    // If the authProvider has an error, stay on this page (error is shown).
+    if (mounted && ref.read(authProvider).error == null) {
+      final email = Uri.encodeComponent(_emailController.text.trim());
+      context.go('/otp-verify?email=$email');
     }
   }
 

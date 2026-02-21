@@ -47,6 +47,8 @@ class FirebaseService {
     required String email,
     String? profilePhoto,
     String role = 'User',
+    String provider = 'email',
+    bool emailVerified = false,
   }) async {
     final docRef = _usersCol.doc(uid);
     final snap = await docRef.get();
@@ -59,6 +61,8 @@ class FirebaseService {
         email: email,
         profilePhoto: profilePhoto,
         role: role,
+        provider: provider,
+        emailVerified: emailVerified,
         createdAt: DateTime.now(),
         lastLogin: DateTime.now(),
       );

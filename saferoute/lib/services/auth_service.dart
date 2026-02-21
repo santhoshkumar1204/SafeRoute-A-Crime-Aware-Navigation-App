@@ -113,6 +113,8 @@ class AuthService {
           name: name,
           email: email,
           role: role,
+          provider: 'email',
+          emailVerified: true,
         );
       }
 
