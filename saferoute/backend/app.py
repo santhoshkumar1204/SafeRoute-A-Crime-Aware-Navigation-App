@@ -93,11 +93,7 @@ def test_routing(safety_factor: float = 1.0) -> dict:
     source_node = "A"
     target_node = "D"
 
-    print("routing_test_start", source_node, target_node, safety_factor)
-
     shortest_distance, shortest_path_nodes = dijkstra(graph, source_node, target_node)
-
-    print("routing_dijkstra_done", shortest_distance, len(shortest_path_nodes))
 
     optimal_cost, optimal_path_nodes = astar(
         graph,
@@ -106,8 +102,6 @@ def test_routing(safety_factor: float = 1.0) -> dict:
         target_node,
         safety_factor,
     )
-
-    print("routing_astar_done", optimal_cost, len(optimal_path_nodes))
 
     return {
         "shortest_distance": shortest_distance,
@@ -119,27 +113,72 @@ def test_routing(safety_factor: float = 1.0) -> dict:
 
 @app.post("/api/safest-route", response_model=SafestRouteResponse)
 def safest_route(payload: SafestRouteRequest) -> SafestRouteResponse:
-    print(f"API CALLED WITH: {payload}")
     try:
-        graph, nodes = get_graph_data()
+        base_graph, base_nodes = get_graph_data()
 
-        source_node = find_nearest_node(payload.source.lat, payload.source.lon, nodes)
-        target_node = find_nearest_node(payload.destination.lat, payload.destination.lon, nodes)
+        # DYNAMIC GRAPH INJECTION
+        # 1. Create a request-specific graph copy
+        # We need to copy adjacency lists for nodes we modify, but for simplicity
+        # we can shallow copy the dict and only create new lists for modified nodes.
+        # However, since we append to existing lists, we must deep copy those lists.
+        # Given graph size is small-ish (thousands), a full deep copy of the dict structure is safest.
+        # Or better: just copy the adjacency lists of the nodes we connect to.
+        
+        # Strategy:
+        # - Copy `base_nodes` to `nodes`
+        # - Copy `base_graph` to `graph` (shallow copy of dict)
+        # - Identify K nearest neighbors for Source and Dest
+        # - For each neighbor, copy their adjacency list before appending
+        
+        nodes = base_nodes.copy()
+        graph = base_graph.copy()
+        
+        # 2. Add Source Node
+        src_id = "SRC_DYNAMIC"
+        nodes[src_id] = (payload.source.lat, payload.source.lon)
+        graph[src_id] = []
+        
+        from routing.graph_utils import find_k_nearest_nodes, haversine_distance, _compute_edge_risk
+        
+        src_neighbors = find_k_nearest_nodes(payload.source.lat, payload.source.lon, base_nodes, k=3)
+        for n_id, dist in src_neighbors:
+            # Connect SRC -> Neighbor
+            risk = _compute_edge_risk((payload.source.lat + base_nodes[n_id][0])/2, (payload.source.lon + base_nodes[n_id][1])/2)
+            graph[src_id].append((n_id, dist, risk))
+            
+            # Connect Neighbor -> SRC (Undirected)
+            # IMPORTANT: Copy the list first so we don't pollute the global cache
+            if graph[n_id] is base_graph[n_id]:
+                graph[n_id] = list(base_graph[n_id])
+            graph[n_id].append((src_id, dist, risk))
+            
+        # 3. Add Destination Node
+        dst_id = "DST_DYNAMIC"
+        nodes[dst_id] = (payload.destination.lat, payload.destination.lon)
+        graph[dst_id] = []
+        
+        dst_neighbors = find_k_nearest_nodes(payload.destination.lat, payload.destination.lon, base_nodes, k=3)
+        for n_id, dist in dst_neighbors:
+            # Connect DST -> Neighbor
+            risk = _compute_edge_risk((payload.destination.lat + base_nodes[n_id][0])/2, (payload.destination.lon + base_nodes[n_id][1])/2)
+            graph[dst_id].append((n_id, dist, risk))
+            
+            # Connect Neighbor -> DST (Undirected)
+            if graph[n_id] is base_graph[n_id]:
+                graph[n_id] = list(base_graph[n_id])
+            graph[n_id].append((dst_id, dist, risk))
+            
+        source_node = src_id
+        target_node = dst_id
+        
+        print(f"Routing request: {source_node} -> {target_node}")
+        print(f"Source connected to: {src_neighbors}")
+        print(f"Dest connected to: {dst_neighbors}")
+
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    print(
-        "safest_route_start",
-        payload.source.lat,
-        payload.source.lon,
-        payload.destination.lat,
-        payload.destination.lon,
-        payload.safety_factor,
-    )
-
     shortest_distance, shortest_path_nodes = dijkstra(graph, source_node, target_node)
-
-    print("safest_route_dijkstra", shortest_distance, len(shortest_path_nodes))
 
     optimal_cost, optimal_path_nodes = astar(
         graph,
@@ -148,8 +187,10 @@ def safest_route(payload: SafestRouteRequest) -> SafestRouteResponse:
         target_node,
         payload.safety_factor,
     )
-
-    print("safest_route_astar", optimal_cost, len(optimal_path_nodes))
+    
+    # DEBUG LOGS
+    print(f"Shortest path length: {len(shortest_path_nodes)}")
+    print(f"Optimal path length: {len(optimal_path_nodes)}")
 
     shortest_path_coords = path_to_coordinates(shortest_path_nodes, nodes)
     optimal_path_coords = path_to_coordinates(optimal_path_nodes, nodes)

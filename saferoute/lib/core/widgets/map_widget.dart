@@ -63,9 +63,25 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
 
   double safeDouble(dynamic value) {
     if (value == null) return 0.0;
-    final d = (value as num).toDouble();
-    if (d.isNaN || d.isInfinite) return 0.0;
-    return d;
+    if (value is int) return value.toDouble();
+    if (value is double) {
+      if (value.isNaN || value.isInfinite) return 0.0;
+      return value;
+    }
+    if (value is String) {
+      final d = double.tryParse(value);
+      if (d == null || d.isNaN || d.isInfinite) return 0.0;
+      return d;
+    }
+    return 0.0;
+  }
+
+  bool _isValidLatLng(double lat, double lon) {
+    return lat >= -90 &&
+        lat <= 90 &&
+        lon >= -180 &&
+        lon <= 180 &&
+        (lat != 0 || lon != 0);
   }
 
   Future<LatLng?> _forwardGeocode(String query) async {
@@ -268,7 +284,7 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
                 if (widget.showHeatmap) CircleLayer(circles: _heatmaps),
                 if (widget.showPoliceStations)
                   MarkerLayer(markers: _policeStations),
-                if (widget.showRoute && _shortestPath.isNotEmpty)
+                if (widget.showRoute && _shortestPath.length > 1)
                   PolylineLayer(
                     polylines: [
                       Polyline(
@@ -277,7 +293,7 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
                           strokeWidth: 4),
                     ],
                   ),
-                if (widget.showRoute && _optimalPath.isNotEmpty)
+                if (widget.showRoute && _optimalPath.length > 1)
                   PolylineLayer(
                     polylines: [
                       Polyline(
@@ -516,9 +532,7 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
             .map((e) {
               final lat = safeDouble(e["lat"]);
               final lon = safeDouble(e["lon"]);
-              // Filter out invalid coordinates to prevent crashes
-              if (lat == 0.0 && lon == 0.0)
-                return null; // Assuming 0,0 is invalid for this app context or resulted from safeDouble failure on bad data
+              if (!_isValidLatLng(lat, lon)) return null;
               return LatLng(lat, lon);
             })
             .where((e) => e != null)
@@ -541,7 +555,7 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
         final lon = safeDouble(z["lon"]);
         final score = safeDouble(z["risk_score"]);
 
-        if (lat == 0.0 && lon == 0.0) continue;
+        if (!_isValidLatLng(lat, lon)) continue;
 
         markers.add(
           Marker(
@@ -592,15 +606,38 @@ class _MapWidgetState extends ConsumerState<MapWidget> {
         }
       });
 
-      if (_optimalPath.isNotEmpty) {
+      // Determine points to include in bounds
+      final pointsForBounds = <LatLng>[];
+      if (_optimalPath.isNotEmpty) pointsForBounds.addAll(_optimalPath);
+      if (_shortestPath.isNotEmpty) pointsForBounds.addAll(_shortestPath);
+      if (_source != null) pointsForBounds.add(_source!);
+      if (_destination != null) pointsForBounds.add(_destination!);
+
+      if (pointsForBounds.isNotEmpty) {
         try {
-          final bounds = LatLngBounds.fromPoints(_optimalPath);
-          _mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: bounds,
-              padding: const EdgeInsets.all(40),
-            ),
-          );
+          // Filter out any lingering invalid points just in case
+          final validPoints = pointsForBounds
+              .where((p) => _isValidLatLng(p.latitude, p.longitude))
+              .toList();
+
+          if (validPoints.isEmpty) return;
+
+          final bounds = LatLngBounds.fromPoints(validPoints);
+
+          // Check for zero-size bounds (single point or all points same)
+          final isZeroSize =
+              (bounds.north == bounds.south) && (bounds.east == bounds.west);
+
+          if (isZeroSize) {
+            _mapController.move(bounds.center, 15.0);
+          } else {
+            _mapController.fitCamera(
+              CameraFit.bounds(
+                bounds: bounds,
+                padding: const EdgeInsets.all(40),
+              ),
+            );
+          }
         } catch (e) {
           debugPrint("Camera fit error: $e");
         }
