@@ -163,6 +163,7 @@ SafeRoute/
 ├── train_model.py        # ML training script
 ├── requirements.txt
 └── README.md
+```
 
 ## 📡 Core API Endpoints
 
