@@ -116,6 +116,8 @@ This ensures slightly longer but significantly safer first- and last-mile connec
 
 ## 🏗️ System Architecture
 
+## 🏗️ System Architecture
+
 ```mermaid
 flowchart TD
     A[Flutter App] -->|Route Request| B[Python Backend]
@@ -126,7 +128,6 @@ flowchart TD
     B -->|Risk-Weighted Graph| E[Dijkstra / A* Engine]
     E -->|Optimized Safe Route| B
     B -->|Response| A
----
 
 ## 🗺️ Risk-Weighted Route Optimization
 
