@@ -1,14 +1,19 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
 import '../constants/app_colors.dart';
-
-enum ZoneType { safe, moderate, danger }
 
 class MapWidget extends StatefulWidget {
   final bool showHeatmap;
   final bool showRoute;
   final bool showPoliceStations;
   final double? height;
+  final bool isInteractive;
 
   const MapWidget({
     super.key,
@@ -16,328 +21,222 @@ class MapWidget extends StatefulWidget {
     this.showRoute = true,
     this.showPoliceStations = false,
     this.height,
+    this.isInteractive = true,
   });
 
   @override
   State<MapWidget> createState() => _MapWidgetState();
 }
 
-class _MapWidgetState extends State<MapWidget> with SingleTickerProviderStateMixin {
-  static const int gridSize = 16;
-  static const double cellSize = 28;
-  late List<List<ZoneType>> grid;
-  int routeProgress = 0;
-
-  static const List<List<int>> routePath = [
-    [1, 1], [2, 1], [3, 2], [4, 3], [5, 4], [6, 5], [7, 5],
-    [8, 6], [9, 7], [10, 8], [11, 9], [12, 10], [13, 11], [14, 12],
-  ];
-
-  static const List<List<int>> policeStations = [
-    [3, 12], [8, 3], [13, 14],
-  ];
+class _MapWidgetState extends State<MapWidget> {
+  final MapController _mapController = MapController();
+  
+  LatLng? _source;
+  LatLng? _destination;
+  String _sourceName = "Select Start Point";
+  String _destName = "Select Destination";
+  
+  List<LatLng> _routePath = [];
+  List<CircleMarker> _heatmaps = [];
+  List<Marker> _policeStations = [];
+  
+  final LatLng _chennaiCenter = const LatLng(13.0827, 80.2707);
 
   @override
   void initState() {
     super.initState();
-    grid = _generateGrid();
-    if (widget.showRoute) {
-      _startAnimation();
+    _loadMTCData();
+  }
+
+  Future<String> _getAddress(LatLng point) async {
+    try {
+      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${point.latitude}&lon=${point.longitude}');
+      final response = await http.get(url, headers: {'User-Agent': 'SafeRouteHackathon'});
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final address = data['display_name'].toString().split(',');
+        return address.isNotEmpty ? address[0] : "Custom Point";
+      }
+    } catch (e) {
+      debugPrint("Geocoding error: $e");
+    }
+    return "Lat: ${point.latitude.toStringAsFixed(3)}";
+  }
+
+  void _handleMapTap(TapPosition tapPosition, LatLng point) async {
+    if (!widget.isInteractive) return;
+
+    setState(() {
+      if (_source == null || (_source != null && _destination != null)) {
+        _source = point;
+        _destination = null;
+        _routePath = [];
+        _sourceName = "Fetching address...";
+      } else {
+        _destination = point;
+        _destName = "Fetching address...";
+      }
+    });
+
+    if (_destination == null) {
+      final name = await _getAddress(point);
+      setState(() => _sourceName = name);
+    } else {
+      final name = await _getAddress(point);
+      setState(() {
+        _destName = name;
+        _routePath = [_source!, _destination!]; // Simplified route
+      });
     }
   }
 
-  void _startAnimation() {
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (!mounted) return false;
-      setState(() {
-        routeProgress = (routeProgress + 1) % routePath.length;
-      });
-      return true;
-    });
-  }
+  Future<void> _loadMTCData() async {
+    try {
+      final String csvData = await rootBundle.loadString('assets/structured_bus_segments.csv');
+      final List<String> lines = csvData.split('\n');
+      final random = Random(42);
+      
+      List<CircleMarker> generatedHeatmaps = [];
+      List<Marker> generatedPolice = [];
 
-  List<List<ZoneType>> _generateGrid() {
-    final random = Random(42);
-    return List.generate(gridSize, (r) {
-      return List.generate(gridSize, (c) {
-        final val = random.nextDouble();
-        if (val < 0.55) return ZoneType.safe;
-        if (val < 0.8) return ZoneType.moderate;
-        return ZoneType.danger;
-      });
-    });
-  }
+      // Generate localized heatmaps for demo
+      for (int i = 0; i < 15; i++) {
+        final point = LatLng(12.9 + random.nextDouble() * 0.2, 80.2 + random.nextDouble() * 0.1);
+        Color zoneColor = AppColors.safe.withOpacity(0.3);
+        double val = random.nextDouble();
+        if (val > 0.8) zoneColor = AppColors.danger.withOpacity(0.4);
+        else if (val > 0.5) zoneColor = AppColors.moderate.withOpacity(0.4);
 
-  Color _zoneColor(ZoneType z) {
-    switch (z) {
-      case ZoneType.safe:
-        return AppColors.safe.withOpacity(0.18);
-      case ZoneType.moderate:
-        return AppColors.moderate.withOpacity(0.22);
-      case ZoneType.danger:
-        return AppColors.danger.withOpacity(0.22);
+        generatedHeatmaps.add(CircleMarker(
+          point: point,
+          color: zoneColor,
+          radius: 600 + random.nextInt(400).toDouble(),
+          useRadiusInMeter: true,
+        ));
+
+        if (val > 0.9) {
+          generatedPolice.add(Marker(
+            point: point,
+            child: const Icon(Icons.local_police, color: Colors.blue, size: 20),
+          ));
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _heatmaps = generatedHeatmaps;
+          _policeStations = generatedPolice;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading CSV: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: widget.height ?? 280,
+      height: widget.height ?? 300,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: CustomPaint(
-                    size: Size(
-                      gridSize * cellSize + 20,
-                      gridSize * cellSize + 20,
-                    ),
-                    painter: _MapPainter(
-                      grid: grid,
-                      showHeatmap: widget.showHeatmap,
-                      showRoute: widget.showRoute,
-                      showPoliceStations: widget.showPoliceStations,
-                      routeProgress: routeProgress,
-                      routePath: routePath,
-                      policeStations: policeStations,
-                      cellSize: cellSize,
-                      gridSize: gridSize,
-                      zoneColor: _zoneColor,
-                    ),
-                  ),
-                ),
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _chennaiCenter,
+                initialZoom: 12.0,
+                onTap: _handleMapTap,
               ),
-            ),
-            // Legend
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _LegendItem(color: AppColors.safe.withOpacity(0.4), label: 'Low Risk'),
-                    const SizedBox(width: 16),
-                    _LegendItem(color: AppColors.moderate.withOpacity(0.4), label: 'Moderate'),
-                    const SizedBox(width: 16),
-                    _LegendItem(color: AppColors.danger.withOpacity(0.4), label: 'High Risk'),
-                    if (widget.showRoute) ...[
-                      const SizedBox(width: 16),
-                      _LegendItem(color: AppColors.primary, label: 'Route', isCircle: true),
+              children: [
+                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                if (widget.showHeatmap) CircleLayer(circles: _heatmaps),
+                if (widget.showPoliceStations) MarkerLayer(markers: _policeStations),
+                if (widget.showRoute && _routePath.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(points: _routePath, color: AppColors.primary, strokeWidth: 5),
                     ],
+                  ),
+                MarkerLayer(
+                  markers: [
+                    if (_source != null)
+                      Marker(point: _source!, child: const Icon(Icons.radio_button_checked, color: Colors.blue, size: 20)),
+                    if (_destination != null)
+                      Marker(point: _destination!, child: const Icon(Icons.location_on, color: Colors.red, size: 30)),
                   ],
                 ),
-              ),
+              ],
             ),
+            
+            if (_source != null && _destination != null)
+              Positioned(
+                bottom: 12,
+                left: 12,
+                right: 12,
+                child: _buildSafetyCard(),
+              ),
           ],
         ),
       ),
     );
   }
-}
 
-class _LegendItem extends StatelessWidget {
-  final Color color;
-  final String label;
-  final bool isCircle;
-
-  const _LegendItem({
-    required this.color,
-    required this.label,
-    this.isCircle = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: isCircle ? null : BorderRadius.circular(2),
-            shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+  Widget _buildSafetyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("24 min", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                child: const Text("98% Safe", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10)),
-      ],
-    );
-  }
-}
-
-class _MapPainter extends CustomPainter {
-  final List<List<ZoneType>> grid;
-  final bool showHeatmap;
-  final bool showRoute;
-  final bool showPoliceStations;
-  final int routeProgress;
-  final List<List<int>> routePath;
-  final List<List<int>> policeStations;
-  final double cellSize;
-  final int gridSize;
-  final Color Function(ZoneType) zoneColor;
-
-  _MapPainter({
-    required this.grid,
-    required this.showHeatmap,
-    required this.showRoute,
-    required this.showPoliceStations,
-    required this.routeProgress,
-    required this.routePath,
-    required this.policeStations,
-    required this.cellSize,
-    required this.gridSize,
-    required this.zoneColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const offset = 10.0;
-
-    // Grid lines
-    final gridPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
-      ..strokeWidth = 0.5;
-    for (int i = 0; i <= gridSize; i++) {
-      canvas.drawLine(
-        Offset(offset, i * cellSize + offset),
-        Offset(gridSize * cellSize + offset, i * cellSize + offset),
-        gridPaint,
-      );
-      canvas.drawLine(
-        Offset(i * cellSize + offset, offset),
-        Offset(i * cellSize + offset, gridSize * cellSize + offset),
-        gridPaint,
-      );
-    }
-
-    // Heatmap zones
-    if (showHeatmap) {
-      for (int r = 0; r < gridSize; r++) {
-        for (int c = 0; c < gridSize; c++) {
-          final rect = RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-              c * cellSize + offset,
-              r * cellSize + offset,
-              cellSize,
-              cellSize,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.circle, size: 10, color: Colors.blue),
+              const SizedBox(width: 12),
+              Expanded(child: Text(_sourceName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.location_on, size: 14, color: Colors.red),
+              const SizedBox(width: 12),
+              Expanded(child: Text(_destName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E293B),
+              minimumSize: const Size(double.infinity, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            const Radius.circular(3),
-          );
-          canvas.drawRRect(rect, Paint()..color = zoneColor(grid[r][c]));
-        }
-      }
-    }
-
-    // Route
-    if (showRoute && routePath.length >= 2) {
-      final routePaint = Paint()
-        ..color = AppColors.primary.withOpacity(0.8)
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..style = PaintingStyle.stroke;
-
-      final path = Path();
-      path.moveTo(
-        routePath[0][1] * cellSize + cellSize / 2 + offset,
-        routePath[0][0] * cellSize + cellSize / 2 + offset,
-      );
-      for (int i = 1; i < routePath.length; i++) {
-        path.lineTo(
-          routePath[i][1] * cellSize + cellSize / 2 + offset,
-          routePath[i][0] * cellSize + cellSize / 2 + offset,
-        );
-      }
-      canvas.drawPath(path, routePaint);
-
-      // Start marker (green)
-      canvas.drawCircle(
-        Offset(
-          routePath[0][1] * cellSize + cellSize / 2 + offset,
-          routePath[0][0] * cellSize + cellSize / 2 + offset,
-        ),
-        6,
-        Paint()..color = AppColors.safe,
-      );
-
-      // End marker (red)
-      canvas.drawCircle(
-        Offset(
-          routePath.last[1] * cellSize + cellSize / 2 + offset,
-          routePath.last[0] * cellSize + cellSize / 2 + offset,
-        ),
-        6,
-        Paint()..color = AppColors.danger,
-      );
-
-      // Moving dot
-      if (routeProgress < routePath.length) {
-        final cx = routePath[routeProgress][1] * cellSize + cellSize / 2 + offset;
-        final cy = routePath[routeProgress][0] * cellSize + cellSize / 2 + offset;
-        canvas.drawCircle(
-          Offset(cx, cy),
-          10,
-          Paint()..color = AppColors.primary.withOpacity(0.2),
-        );
-        canvas.drawCircle(
-          Offset(cx, cy),
-          5,
-          Paint()..color = AppColors.primary,
-        );
-      }
-    }
-
-    // Police stations
-    if (showPoliceStations) {
-      for (final s in policeStations) {
-        final cx = s[1] * cellSize + cellSize / 2 + offset;
-        final cy = s[0] * cellSize + cellSize / 2 + offset;
-        canvas.drawCircle(
-          Offset(cx, cy),
-          8,
-          Paint()..color = AppColors.primary.withOpacity(0.2),
-        );
-        final tp = TextPainter(
-          text: const TextSpan(text: '🏛', style: TextStyle(fontSize: 12)),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapPainter oldDelegate) {
-    return oldDelegate.routeProgress != routeProgress ||
-        oldDelegate.showHeatmap != showHeatmap ||
-        oldDelegate.showRoute != showRoute ||
-        oldDelegate.showPoliceStations != showPoliceStations;
+            child: const Text("Start Safe Navigation", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -24,6 +24,11 @@ dependencies:
   google_sign_in: ^6.2.1
   connectivity_plus: ^6.0.3
   pin_code_fields: ^8.0.1
+  flutter_map: ^6.1.0      # Renders the real map
+  latlong2: ^0.9.0         # Handles coordinates (Lat/Lon)
+  geolocator: ^11.0.0      # Gets user's live device location
+  csv: ^6.0.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
@@ -35,3 +40,4 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/structured_bus_segments.csv

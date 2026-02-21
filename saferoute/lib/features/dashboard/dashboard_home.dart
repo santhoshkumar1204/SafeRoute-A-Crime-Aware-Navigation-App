@@ -13,52 +13,22 @@ class DashboardHome extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
-    final riskState = ref.watch(riskProvider);
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isDesktop = screenWidth >= 1024;
+    // Accessing state from your providers
+    final authState = ref.watch(authProvider);
+    final riskState = ref.watch(riskProvider); // Updated to match your state provider
+
+    final user = authState.user;
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome banner
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back, ${user?.name ?? 'User'}! 👋',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Here's your safety & transport overview for today.",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildWelcomeBanner(user),
           const SizedBox(height: 16),
-
-          // Stats grid
           _buildStatsGrid(riskState),
           const SizedBox(height: 16),
 
-          // Map + chart row
           isDesktop
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,17 +49,14 @@ class DashboardHome extends ConsumerWidget {
                 ),
           const SizedBox(height: 16),
 
-          // MTC Bus Intelligence
           _buildBusIntelligence(isDesktop),
           const SizedBox(height: 16),
 
-          // Event alerts
           if (MockData.events.isNotEmpty) ...[
             _buildEventAlerts(),
             const SizedBox(height: 16),
           ],
 
-          // Crime Density + Community
           isDesktop
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +84,6 @@ class DashboardHome extends ConsumerWidget {
                 ),
           const SizedBox(height: 16),
 
-          // Green Mobility
           _buildGreenMobility(),
           const SizedBox(height: 24),
         ],
@@ -125,9 +91,38 @@ class DashboardHome extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsGrid(RiskState riskState) {
+  Widget _buildWelcomeBanner(dynamic user) {
+    final name = user?.name ?? 'User';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.waving_hand, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Welcome back, $name 👋',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsGrid(dynamic riskState) {
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth >= 600;
+
       final cards = [
         StatCard(
           icon: Icons.shield,
@@ -166,6 +161,7 @@ class DashboardHome extends ConsumerWidget {
           children: cards,
         );
       }
+
       return Column(
         children: cards
             .map((c) => Padding(
@@ -178,381 +174,130 @@ class DashboardHome extends ConsumerWidget {
   }
 
   Widget _buildAreaOverview() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Area Overview',
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
-        SizedBox(height: 12),
-        SizedBox(
-          height: 280,
-          child: MapWidget(
-            showHeatmap: true,
-            showRoute: true,
-            showPoliceStations: false,
-          ),
+        const SizedBox(height: 12),
+        MapWidget(
+          showHeatmap: true,
+          showRoute: true,
+          showPoliceStations: false,
+          height: 350,
+          isInteractive: true, // Enables the source/destination picking
         ),
       ],
     );
   }
 
   Widget _buildBusIntelligence(bool isDesktop) {
-    final nextBus = {
-      'route': MockData.nextBus.route,
-      'type': MockData.nextBus.type,
-      'eta': MockData.nextBus.eta,
-      'from': MockData.nextBus.from,
-      'to': MockData.nextBus.to,
-    };
+    final nextBus = MockData.nextBus;
     final crowd = MockData.crowdData.first;
-    final delay = MockData.delayData.first;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          children: [
-            Icon(Icons.directions_bus, size: 16, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text(
-              'TN MTC Bus Intelligence',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-          ],
+        const Text(
+          'MTC Intelligence',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         const SizedBox(height: 12),
-        isDesktop
-            ? Row(
-                children: [
-                  Expanded(child: _nextBusCard(nextBus)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: StatCard(
-                      icon: Icons.people,
-                      label: 'Crowd at Nearest Stop',
-                      value: '${crowd.percent}%',
-                      colorType:
-                          crowd.level == 'high' ? 'danger' : 'warning',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: StatCard(
-                      icon: Icons.trending_up,
-                      label: 'Delay Risk (Route 21G)',
-                      value: '${delay.probability}%',
-                      colorType: 'warning',
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                children: [
-                  _nextBusCard(nextBus),
-                  const SizedBox(height: 8),
-                  StatCard(
-                    icon: Icons.people,
-                    label: 'Crowd at Nearest Stop',
-                    value: '${crowd.percent}%',
-                    colorType:
-                        crowd.level == 'high' ? 'danger' : 'warning',
-                  ),
-                  const SizedBox(height: 8),
-                  StatCard(
-                    icon: Icons.trending_up,
-                    label: 'Delay Risk (Route 21G)',
-                    value: '${delay.probability}%',
-                    colorType: 'warning',
-                  ),
-                ],
-              ),
-      ],
-    );
-  }
-
-  Widget _nextBusCard(Map<String, dynamic> bus) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16),
           ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.directions_bus,
-                  color: AppColors.primary, size: 28),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              const Text(
-                'Next Bus',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                bus['route'] as String,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${bus['type']} · ETA: ${bus['eta']}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${bus['from']} → ${bus['to']}',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: AppColors.mutedForeground,
+              const Icon(Icons.directions_bus, color: AppColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${nextBus.route} • ETA: ${nextBus.eta}',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('Crowd Level: ${crowd.percent}% full',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildEventAlerts() {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.05),
+        color: Colors.orange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.warning.withOpacity(0.2)),
+        border: Border.all(color: Colors.orange.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '🎪 Active Events',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
+          const Text('🎪 Active Events', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...MockData.events.map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Text(
-                            e.name,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${e.area} · ${e.date}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.mutedForeground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: e.impact == 'high'
-                            ? AppColors.danger.withOpacity(0.1)
-                            : AppColors.warning.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${e.congestion}% congestion',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: e.impact == 'high'
-                              ? AppColors.danger
-                              : AppColors.warning,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+          ...MockData.events.map((e) => Text('• ${e.name} at ${e.area}')),
         ],
       ),
     );
   }
 
   Widget _buildCommunityActivity() {
-    const activities = [
-      'Overcrowding reported on Bus 21G',
-      'Suspicious activity near T. Nagar',
-      'Street light outage at Guindy stop',
-      'Bus delay at Tambaram resolved',
-    ];
-
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Community Activity',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          ...activities.map((a) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        a,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.mutedForeground,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+          Text('Community Activity', style: TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: 12),
+          Text('• Overcrowding reported on 21G', style: TextStyle(fontSize: 12)),
+          SizedBox(height: 8),
+          Text('• Street light out near Guindy', style: TextStyle(fontSize: 12)),
         ],
       ),
     );
   }
 
   Widget _buildGreenMobility() {
+    const green = MockData.greenData;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.safe.withOpacity(0.05),
+        color: AppColors.safe.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.safe.withOpacity(0.2)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.eco, size: 16, color: AppColors.safe),
-              SizedBox(width: 8),
-              Text(
-                'Green Mobility Impact',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 400;
-            const green = MockData.greenData;
-            final items = [
-              _MiniStat('CO₂ Saved', '${green.co2Saved} kg'),
-              _MiniStat('Fuel Saved', '${green.fuelSaved} L'),
-              _MiniStat(
-                  'Public Transport Trips', '${green.publicTransportTrips}'),
-              _MiniStat('Trees Equivalent', '${green.treesEquivalent}'),
-            ];
-
-            if (isWide) {
-              return Row(
-                children: items
-                    .map((i) => Expanded(child: _buildMiniStat(i)))
-                    .toList(),
-              );
-            }
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              childAspectRatio: 2.5,
-              children:
-                  items.map((i) => _buildMiniStat(i)).toList(),
-            );
-          }),
+          _buildMiniStat('CO₂ Saved', '${green.co2Saved}kg'),
+          _buildMiniStat('Trees Eq.', '${green.treesEquivalent}'),
+          _buildMiniStat('Trips', '${green.publicTransportTrips}'),
         ],
       ),
     );
   }
 
-  Widget _buildMiniStat(_MiniStat stat) {
+  Widget _buildMiniStat(String label, String value) {
     return Column(
       children: [
-        Text(
-          stat.value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.safe,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          stat.label,
-          style: const TextStyle(
-            fontSize: 10,
-            color: AppColors.mutedForeground,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.safe)),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
     );
   }
-}
-
-class _MiniStat {
-  final String label;
-  final String value;
-  const _MiniStat(this.label, this.value);
 }
