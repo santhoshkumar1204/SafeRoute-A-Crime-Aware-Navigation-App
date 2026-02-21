@@ -31,6 +31,12 @@ class AuthState {
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthService _authService;
 
+  // ── Pending signup data (held until OTP is verified) ────────
+  String? _pendingName;
+  String? _pendingEmail;
+  String? _pendingPassword;
+  String? _pendingRole;
+
   AuthNotifier(this._authService) : super(const AuthState()) {
     _init();
   }
@@ -65,12 +71,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signup(String name, String email, String password, String role) async {
     state = state.copyWith(status: AuthStatus.loading, error: null);
     try {
-      final user = await _authService.signup(name, email, password, role);
-      state = AuthState(status: AuthStatus.authenticated, user: user);
+      // Store pending signup data — actual account creation happens after OTP
+      _pendingName = name;
+      _pendingEmail = email;
+      _pendingPassword = password;
+      _pendingRole = role;
+
+      // Send OTP to the email
+      await _authService.emailOtpService.sendOtp(email);
+
+      // Stay unauthenticated — UI will navigate to OTP verification page
+      state = const AuthState(status: AuthStatus.unauthenticated);
     } catch (e) {
+      _clearPending();
       state = AuthState(
         status: AuthStatus.unauthenticated,
-        error: e.toString(),
+        error: e.toString().replaceFirst('Exception: ', ''),
       );
     }
   }
@@ -95,7 +111,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.loading, error: null);
     try {
       await _authService.emailOtpService.sendOtp(email);
-      // Stay in loading=false, unauthenticated – UI will navigate to OTP entry
+      // Stay unauthenticated – UI will navigate to OTP entry
       state = const AuthState(status: AuthStatus.unauthenticated);
     } catch (e) {
       state = AuthState(
@@ -105,12 +121,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Email OTP Login – step 2: verify OTP
+  /// Email OTP – step 2: verify OTP.
+  ///
+  /// If pending signup data exists (user came from the signup page), the
+  /// verified OTP triggers Firebase Auth account creation + Firestore sync.
+  /// Otherwise it's a login-via-OTP flow — creates a local session.
   Future<void> verifyOtp(String email, String otp) async {
     state = state.copyWith(status: AuthStatus.loading, error: null);
     try {
       await _authService.emailOtpService.verifyOtp(email, otp);
-      // OTP verified – create user session
+
+      // ── Signup flow: create Firebase account after OTP verified ──
+      if (_hasPendingSignup) {
+        final user = await _authService.signup(
+          _pendingName!,
+          _pendingEmail!,
+          _pendingPassword!,
+          _pendingRole!,
+        );
+        _clearPending();
+        state = AuthState(status: AuthStatus.authenticated, user: user);
+        return;
+      }
+
+      // ── Login OTP flow: create local session ────────────────────
       final user = UserModel(
         name: email.split('@').first,
         email: email,
@@ -124,6 +158,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: e.toString().replaceFirst('Exception: ', ''),
       );
     }
+  }
+
+  /// Whether there is a pending signup waiting for OTP verification.
+  bool get _hasPendingSignup =>
+      _pendingName != null &&
+      _pendingEmail != null &&
+      _pendingPassword != null;
+
+  void _clearPending() {
+    _pendingName = null;
+    _pendingEmail = null;
+    _pendingPassword = null;
+    _pendingRole = null;
   }
 
   Future<void> logout() async {

@@ -1,21 +1,53 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 import 'core/theme/app_theme.dart';
 import 'routes/app_router.dart';
 import 'providers/theme_provider.dart';
 import 'providers/connectivity_provider.dart';
+import 'services/firebase_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Catch all uncaught Flutter errors so the app never shows a blank screen.
+  FlutterError.onError = (details) {
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+  };
 
-  // Load .env – file is optional; silences errors if missing.
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (_) {}
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const ProviderScope(child: SafeRouteApp()));
+    // Load .env – file is optional; silences errors if missing.
+    try {
+      await dotenv.load(fileName: '.env');
+    } catch (_) {}
+
+    // Initialize Firebase with platform-specific options
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('Firebase initialized successfully');
+
+      // Seed initial Firestore data if collections are empty.
+      try {
+        final firebaseSvc = FirebaseService.instance;
+        await firebaseSvc.seedAnalyticsIfNeeded();
+        await firebaseSvc.seedAlertsIfNeeded();
+      } catch (e) {
+        debugPrint('Firestore seeding skipped: $e');
+      }
+    } catch (e) {
+      debugPrint('Firebase init skipped: $e');
+    }
+
+    runApp(const ProviderScope(child: SafeRouteApp()));
+  }, (error, stack) {
+    debugPrint('Uncaught error: $error');
+  });
 }
 
 class SafeRouteApp extends ConsumerStatefulWidget {

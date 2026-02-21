@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/data_models.dart';
 import '../data/mock_data.dart';
+import 'firebase_providers.dart';
 
 // Map State
 class MapState {
@@ -76,7 +77,8 @@ class RouteNotifier extends StateNotifier<RouteState> {
 
 final routeProvider = StateNotifierProvider<RouteNotifier, RouteState>((ref) => RouteNotifier());
 
-// Risk State (read-only dashboard stats)
+// Risk State – now powered by Firebase via dashboardStatsProvider.
+// Kept for backward-compatibility; the dashboard reads this provider.
 class RiskState {
   final int todaySafetyScore;
   final int nearbyHighRiskAreas;
@@ -91,7 +93,15 @@ class RiskState {
   });
 }
 
-final riskProvider = Provider<RiskState>((ref) => const RiskState());
+final riskProvider = Provider<RiskState>((ref) {
+  final stats = ref.watch(dashboardStatsProvider);
+  return RiskState(
+    todaySafetyScore: stats.todaySafetyScore,
+    nearbyHighRiskAreas: stats.nearbyHighRiskAreas,
+    recentAlerts: stats.recentAlerts,
+    tripsThisWeek: stats.tripsThisWeek,
+  );
+});
 
 // Notification State
 class NotificationNotifier extends StateNotifier<List<NotificationModel>> {

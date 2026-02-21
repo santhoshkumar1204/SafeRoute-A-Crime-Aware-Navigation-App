@@ -51,8 +51,11 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           _passwordController.text,
           _role,
         );
-    if (mounted && ref.read(authProvider).isAuthenticated) {
-      context.go('/dashboard');
+    // After signup(), OTP has been sent. Navigate to OTP verification page.
+    // If the authProvider has an error, stay on this page (error is shown).
+    if (mounted && ref.read(authProvider).error == null) {
+      final email = Uri.encodeComponent(_emailController.text.trim());
+      context.go('/otp-verify?email=$email');
     }
   }
 
@@ -139,11 +142,12 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                             decoration: const InputDecoration(
                                 hintText: 'you@example.com'),
                             validator: (v) {
-                              if (v == null || v.isEmpty) {
+                              if (v == null || v.trim().isEmpty) {
                                 return 'Email is required';
                               }
-                              if (!v.contains('@')) {
-                                return 'Enter a valid email';
+                              final emailRegex = RegExp(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$');
+                              if (!emailRegex.hasMatch(v.trim())) {
+                                return 'Enter a valid email (e.g. user@gmail.com)';
                               }
                               return null;
                             },
@@ -167,8 +171,11 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                                     () => _showPassword = !_showPassword),
                               ),
                             ),
-                            validator: (v) =>
-                                v!.isEmpty ? 'Password is required' : null,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Password is required';
+                              if (v.length < 6) return 'Password must be at least 6 characters';
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
                           _label(context, 'Confirm Password'),
@@ -177,8 +184,11 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                             obscureText: true,
                             decoration: const InputDecoration(
                                 hintText: '••••••••'),
-                            validator: (v) =>
-                                v!.isEmpty ? 'Please confirm password' : null,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Please confirm password';
+                              if (v != _passwordController.text) return 'Passwords do not match';
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
                           _label(context, 'Role'),

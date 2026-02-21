@@ -284,6 +284,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/widgets/safe_route_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/app_colors.dart';
+import '../../data/mock_data.dart';
+import '../../providers/app_state_provider.dart';
+import '../../providers/firebase_providers.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});
