@@ -198,6 +198,7 @@ flowchart TD
     B -->|Risk-Weighted Graph| E[Dijkstra / A* Engine]
     E -->|Optimized Safe Route| B
     B -->|Response| A
+```
 
 
 
