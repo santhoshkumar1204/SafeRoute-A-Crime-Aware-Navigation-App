@@ -1,642 +1,332 @@
-import 'dart:async';
-import 'dart:math';
+//live_map_section.dart - This widget displays an interactive map using Flutter Map, showing bus stops from a CSV file and allowing users to click on the map to set source/destination points. It fetches routing data from OSRM to display routes and turn-by-turn instructions. The map also includes markers for bus stops, which show details in a bottom sheet when tapped. The widget is designed to be reusable and integrates seamlessly with the landing page of the SafeRoute app.
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../../../core/constants/app_colors.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
+import 'package:csv/csv.dart';
 
-enum _Zone { safe, moderate, danger }
+// Helper class to store bus stop data
+class BusStop {
+  final String name;
+  final double lat;
+  final double lon;
+  final List<String> routes;
 
-const int _gridSize = 20;
-const double _cell = 28;
-
-const _zoneColors = {
-  _Zone.safe: Color.fromRGBO(22, 163, 74, 0.18),
-  _Zone.moderate: Color.fromRGBO(245, 158, 11, 0.22),
-  _Zone.danger: Color.fromRGBO(220, 38, 38, 0.22),
-};
-
-const List<List<int>> _routePath = [
-  [1, 1], [2, 1], [3, 1], [4, 2], [5, 3], [6, 4], [7, 5], [8, 5],
-  [9, 6], [10, 7], [11, 8], [12, 9], [13, 10], [14, 10], [15, 11],
-  [16, 12], [17, 13], [18, 14], [18, 15],
-];
-
-class _RiskMarker {
-  final int r, c;
-  final _Zone level;
-  final int score;
-  const _RiskMarker(this.r, this.c, this.level, this.score);
-}
-
-const _riskMarkers = [
-  _RiskMarker(5, 7, _Zone.danger, 82),
-  _RiskMarker(10, 3, _Zone.moderate, 54),
-  _RiskMarker(14, 15, _Zone.danger, 76),
-  _RiskMarker(8, 12, _Zone.moderate, 48),
-];
-
-List<List<_Zone>> _generateGrid() {
-  final rng = Random();
-  return List.generate(_gridSize, (_) {
-    return List.generate(_gridSize + 1, (_) {
-      final r = rng.nextDouble();
-      if (r < 0.55) return _Zone.safe;
-      if (r < 0.8) return _Zone.moderate;
-      return _Zone.danger;
-    });
+  BusStop({
+    required this.name,
+    required this.lat,
+    required this.lon,
+    required this.routes,
   });
 }
 
-class LiveMapSection extends StatefulWidget {
-  const LiveMapSection({super.key});
+class MapComponent extends StatefulWidget {
+  final LatLng? sourceCoords;
+  final LatLng? destCoords;
+  final Function(LatLng)? onMapClick;
+  final double height;
+  final bool showHeatmap;
+  final bool showRoute;
+  final bool showPoliceStations;
+
+  const MapComponent({
+    super.key,
+    this.sourceCoords,
+    this.destCoords,
+    this.onMapClick,
+    this.height = 320.0,
+    this.showHeatmap = false,
+    this.showRoute = false,
+    this.showPoliceStations = false,
+  });
 
   @override
-  State<LiveMapSection> createState() => _LiveMapSectionState();
+  State<MapComponent> createState() => _MapComponentState();
 }
 
-class _LiveMapSectionState extends State<LiveMapSection> {
-  late final List<List<_Zone>> _grid;
-  bool _showHeatmap = true;
-  bool _showPrediction = true;
-  String _timeOfDay = 'evening';
-  int? _hoveredMarker;
-  int _routeProgress = 0;
-  Timer? _timer;
+class _MapComponentState extends State<MapComponent> {
+  final MapController _mapController = MapController();
+  final LatLng _chennaiCenter = const LatLng(13.0827, 80.2707);
+  double? _distanceInMeters;
+  double? _durationInSeconds;
+  List<dynamic> _turnByTurnSteps = [];
+  
+  List<BusStop> _busStops = [];
+  List<LatLng> _routePoints = [];
+  bool _isLoadingRoute = false;
 
   @override
   void initState() {
     super.initState();
-    _grid = _generateGrid();
-    _timer = Timer.periodic(const Duration(milliseconds: 600), (_) {
-      if (mounted) {
-        setState(() {
-          _routeProgress = (_routeProgress + 1) % _routePath.length;
-        });
-      }
-    });
+    _loadBusStops();
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
+  void didUpdateWidget(covariant MapComponent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If source or destination changes, recalculate the route
+    if (widget.sourceCoords != oldWidget.sourceCoords || 
+        widget.destCoords != oldWidget.destCoords) {
+      if (widget.sourceCoords != null && widget.destCoords != null) {
+        _fetchRoute(widget.sourceCoords!, widget.destCoords!);
+      } else {
+        setState(() => _routePoints = []);
+      }
+    }
+  }
+
+  // Load and parse CSV exactly like PapaParse in React
+  Future<void> _loadBusStops() async {
+    try {
+      final String csvString = await rootBundle.loadString('assets/structured_bus_segments.csv');
+      List<List<dynamic>> csvTable = const CsvToListConverter(eol: '\n').convert(csvString);
+      
+      if (csvTable.isEmpty) return;
+
+      // Extract headers to find indices
+      final headers = csvTable.first.map((e) => e.toString().trim()).toList();
+      final stopIdx = headers.indexOf('Start_Stop');
+      final latIdx = headers.indexOf('Start_Lat');
+      final lonIdx = headers.indexOf('Start_Lon');
+      final routeIdx = headers.indexOf('Route_No');
+
+      if (stopIdx == -1 || latIdx == -1 || lonIdx == -1) return;
+
+      Map<String, BusStop> uniqueStops = {};
+
+      for (int i = 1; i < csvTable.length; i++) {
+        final row = csvTable[i];
+        if (row.length <= lonIdx) continue; // Skip malformed rows
+
+        final stopName = row[stopIdx].toString();
+        final lat = double.tryParse(row[latIdx].toString());
+        final lon = double.tryParse(row[lonIdx].toString());
+        final route = routeIdx != -1 ? row[routeIdx].toString() : '';
+
+        if (lat != null && lon != null) {
+          if (!uniqueStops.containsKey(stopName)) {
+            uniqueStops[stopName] = BusStop(
+              name: stopName,
+              lat: lat,
+              lon: lon,
+              routes: [route],
+            );
+          } else {
+            if (!uniqueStops[stopName]!.routes.contains(route)) {
+              uniqueStops[stopName]!.routes.add(route);
+            }
+          }
+        }
+      }
+
+      setState(() {
+        _busStops = uniqueStops.values.toList();
+      });
+    } catch (e) {
+      debugPrint("Error loading CSV: $e");
+    }
+  }
+
+  // Fetch routing data from OSRM (Leaflet Routing Machine's default backend)
+  Future<void> _fetchRoute(LatLng start, LatLng end) async {
+    setState(() => _isLoadingRoute = true);
+    
+    // ADDED: steps=true and overview=full
+    final url = 'http://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&steps=true&overview=full';
+    
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final route = data['routes'][0];
+        final List coordinates = route['geometry']['coordinates'];
+        
+        setState(() {
+          _routePoints = coordinates.map((c) => LatLng(c[1], c[0])).toList();
+          
+          // EXTRACT REAL DATA
+          _distanceInMeters = route['distance'].toDouble();
+          _durationInSeconds = route['duration'].toDouble();
+          
+          // EXTRACT TURN-BY-TURN STEPS
+          _turnByTurnSteps = route['legs'][0]['steps']; 
+          
+          _isLoadingRoute = false;
+        });
+
+        final bounds = LatLngBounds.fromPoints(_routePoints);
+        _mapController.fitCamera(
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(40)),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error fetching route: $e");
+      setState(() => _isLoadingRoute = false);
+    }
+  }
+
+  void _showStopDetails(BuildContext context, BusStop stop) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(stop.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Routes: ${stop.routes.where((r) => r.isNotEmpty).join(", ")}'),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isDesktop = screenWidth >= 1024;
-
     return Container(
-      color: AppColors.background,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
-      child: Column(
-        children: [
-          // Title
-          Text(
-            'Live Crime',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: isDesktop ? 36 : 28,
-              fontWeight: FontWeight.w700,
-              color: AppColors.foreground,
-            ),
-          ),
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                AppColors.primaryGradient.createShader(bounds),
-            child: Text(
-              'Heatmap Prototype',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: isDesktop ? 36 : 28,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: const Text(
-              'Interactive map showing AI-predicted crime risk zones with real-time route analysis',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.mutedForeground,
-                height: 1.5,
-              ),
-            ),
-          ),
-          const SizedBox(height: 40),
-
-          // Map + Controls
-          isDesktop
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildMap()),
-                    const SizedBox(width: 24),
-                    SizedBox(width: 300, child: _buildControls()),
-                  ],
-                )
-              : Column(
-                  children: [
-                    _buildMap(),
-                    const SizedBox(height: 16),
-                    _buildControls(),
-                  ],
-                ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMap() {
-    final svgW = _gridSize * _cell + 20;
-    final svgH = _gridSize * _cell + 20;
-
-    return Container(
+      height: widget.height,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))
         ],
       ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
+      child: Stack(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: svgW,
-              height: svgH,
-              child: CustomPaint(
-                painter: _MapPainter(
-                  grid: _grid,
-                  showHeatmap: _showHeatmap,
-                  showPrediction: _showPrediction,
-                  routeProgress: _routeProgress,
-                  hoveredMarker: _hoveredMarker,
-                ),
-                child: MouseRegion(
-                  onHover: (event) {
-                    // Check if hovering over a risk marker
-                    for (int i = 0; i < _riskMarkers.length; i++) {
-                      final m = _riskMarkers[i];
-                      final cx = m.c * _cell + _cell / 2 + 10;
-                      final cy = m.r * _cell + _cell / 2 + 10;
-                      final dx = event.localPosition.dx - cx;
-                      final dy = event.localPosition.dy - cy;
-                      if (dx * dx + dy * dy < 16 * 16) {
-                        if (_hoveredMarker != i) {
-                          setState(() => _hoveredMarker = i);
-                        }
-                        return;
-                      }
-                    }
-                    if (_hoveredMarker != null) {
-                      setState(() => _hoveredMarker = null);
-                    }
-                  },
-                  onExit: (_) {
-                    if (_hoveredMarker != null) {
-                      setState(() => _hoveredMarker = null);
-                    }
-                  },
-                  child: const SizedBox.expand(),
-                ),
-              ),
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _chennaiCenter,
+              initialZoom: 12,
+              onTap: (tapPosition, point) {
+                if (widget.onMapClick != null) widget.onMapClick!(point);
+              },
             ),
-          ),
-          const SizedBox(height: 16),
-          // Legend
-          Wrap(
-            spacing: 16,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
             children: [
-              _legendItem(AppColors.safe.withOpacity(0.3), 'Low Risk'),
-              _legendItem(AppColors.warning.withOpacity(0.3), 'Moderate'),
-              _legendItem(AppColors.danger.withOpacity(0.3), 'High Risk'),
-              _legendItem(AppColors.primary, 'Route', isCircle: true),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legendItem(Color color, String label, {bool isCircle = false}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius:
-                isCircle ? BorderRadius.circular(6) : BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AppColors.mutedForeground),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildControls() {
-    return Column(
-      children: [
-        // Map Controls
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.your_app', 
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Map Controls',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _toggleControl(
-                icon: Icons.layers,
-                label: 'Crime Heatmap',
-                active: _showHeatmap,
-                onToggle: () => setState(() => _showHeatmap = !_showHeatmap),
-              ),
-              const SizedBox(height: 12),
-              _toggleControl(
-                icon: Icons.visibility,
-                label: 'AI Prediction',
-                active: _showPrediction,
-                onToggle: () =>
-                    setState(() => _showPrediction = !_showPrediction),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Time of Day
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.access_time, size: 16, color: AppColors.foreground),
-                  SizedBox(width: 8),
-                  Text(
-                    'Time of Day',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+              
+              // 1. Draw Routing Line
+              if (widget.showRoute && _routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      strokeWidth: 5.0,
+                      color: Colors.blue.shade700.withOpacity(0.8),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...['morning', 'afternoon', 'evening', 'night'].map(
-                (t) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => setState(() => _timeOfDay = t),
+                  ],
+                ),
+
+              // 2. Draw Bus Stops (Circle Markers)
+              MarkerLayer(
+                markers: _busStops.map((stop) {
+                  return Marker(
+                    point: LatLng(stop.lat, stop.lon),
+                    width: 10,
+                    height: 10,
+                    child: GestureDetector(
+                      onTap: () => _showStopDetails(context, stop),
                       child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: _timeOfDay == t
-                              ? AppColors.primary
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          t[0].toUpperCase() + t.substring(1),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: _timeOfDay == t
-                                ? Colors.white
-                                : AppColors.foreground,
-                          ),
+                          color: Colors.green.shade700.withOpacity(0.7),
+                          shape: BoxShape.circle,
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }).toList(),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
 
-        // Quick Toggle
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.place, size: 16, color: AppColors.foreground),
-                  SizedBox(width: 8),
-                  Text(
-                    'Quick Toggle',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+              // 3. Draw Source / Dest Markers
+              MarkerLayer(
+                markers: [
+                  if (widget.sourceCoords != null)
+                    Marker(
+                      point: widget.sourceCoords!,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(Icons.location_on, color: Colors.blue, size: 40),
                     ),
-                  ),
+                  if (widget.destCoords != null)
+                    Marker(
+                      point: widget.destCoords!,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                    ),
                 ],
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Police Stations',
-                style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Community Reports',
-                style: TextStyle(fontSize: 12, color: AppColors.mutedForeground),
-              ),
             ],
           ),
-        ),
-      ],
-    );
-  }
 
-  Widget _toggleControl({
-    required IconData icon,
-    required String label,
-    required bool active,
-    required VoidCallback onToggle,
-  }) {
-    return GestureDetector(
-      onTap: onToggle,
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.foreground),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-          // Custom toggle switch
-          Container(
-            width: 36,
-            height: 20,
-            decoration: BoxDecoration(
-              color: active ? AppColors.primary : AppColors.muted,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 200),
-              alignment:
-                  active ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                width: 16,
-                height: 16,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 2,
-                    ),
-                  ],
+          // Place this inside your Stack children, below FlutterMap
+if (_turnByTurnSteps.isNotEmpty)
+  Positioned(
+    top: 10,
+    right: 10,
+    child: Container(
+      width: 240,
+      constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: ListView.builder(
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        itemCount: _turnByTurnSteps.length,
+        itemBuilder: (context, index) {
+          final step = _turnByTurnSteps[index];
+          final maneuver = step['maneuver'];
+          
+          // Safely parse OSRM maneuver text
+          String type = maneuver['type'] ?? '';
+          String modifier = maneuver['modifier'] != null ? " ${maneuver['modifier']}" : "";
+          String name = step['name'] == "" ? "destination" : step['name'];
+          String distance = "${(step['distance'] as num).toStringAsFixed(0)}m";
+          
+          // Clean up the text (e.g., "turn left onto Madley Road")
+          String instruction = "${type[0].toUpperCase()}${type.substring(1)}$modifier onto $name";
+          if (type == 'depart' || type == 'arrive') {
+             instruction = type == 'depart' ? "Head ${modifier.trim()} on $name" : "Arrive at $name";
+          }
+
+          return ListTile(
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            leading: const Icon(Icons.turn_right, size: 16, color: Colors.blueGrey),
+            title: Text(instruction, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+            trailing: Text(distance, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          );
+        },
+      ),
+    ),
+  ),
+
+          if (_isLoadingRoute)
+            const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: CircularProgressIndicator(),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
-}
-
-class _MapPainter extends CustomPainter {
-  final List<List<_Zone>> grid;
-  final bool showHeatmap;
-  final bool showPrediction;
-  final int routeProgress;
-  final int? hoveredMarker;
-
-  _MapPainter({
-    required this.grid,
-    required this.showHeatmap,
-    required this.showPrediction,
-    required this.routeProgress,
-    this.hoveredMarker,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
-      ..strokeWidth = 0.5;
-
-    // Grid lines
-    for (int i = 0; i <= _gridSize; i++) {
-      canvas.drawLine(
-        Offset(10, i * _cell + 10),
-        Offset(_gridSize * _cell + 10, i * _cell + 10),
-        gridPaint,
-      );
-      canvas.drawLine(
-        Offset(i * _cell + 10, 10),
-        Offset(i * _cell + 10, _gridSize * _cell + 10),
-        gridPaint,
-      );
-    }
-
-    // Heatmap zones
-    if (showHeatmap) {
-      for (int r = 0; r < grid.length; r++) {
-        for (int c = 0; c < grid[r].length && c < _gridSize; c++) {
-          final zone = grid[r][c];
-          final rect = RRect.fromRectAndRadius(
-            Rect.fromLTWH(c * _cell + 10, r * _cell + 10, _cell, _cell),
-            const Radius.circular(4),
-          );
-          canvas.drawRRect(rect, Paint()..color = _zoneColors[zone]!);
-        }
-      }
-    }
-
-    // Route line
-    final routePaint = Paint()
-      ..color = const Color(0xFF2563EB)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-
-    final routePoints = _routePath
-        .map((p) => Offset(
-              p[1] * _cell + _cell / 2 + 10,
-              p[0] * _cell + _cell / 2 + 10,
-            ))
-        .toList();
-
-    if (routePoints.length > 1) {
-      final path = Path()..moveTo(routePoints[0].dx, routePoints[0].dy);
-      for (int i = 1; i < routePoints.length; i++) {
-        path.lineTo(routePoints[i].dx, routePoints[i].dy);
-      }
-      canvas.drawPath(path, routePaint..color = const Color(0xCC2563EB));
-    }
-
-    // Moving dot
-    if (routeProgress < _routePath.length) {
-      final pos = routePoints[routeProgress];
-      // Pulse ring
-      canvas.drawCircle(
-        pos,
-        10,
-        Paint()..color = const Color(0x332563EB),
-      );
-      // Solid dot
-      canvas.drawCircle(
-        pos,
-        5,
-        Paint()..color = const Color(0xFF2563EB),
-      );
-    }
-
-    // Start marker (green)
-    canvas.drawCircle(
-      routePoints.first,
-      6,
-      Paint()..color = const Color(0xFF16A34A),
-    );
-
-    // End marker (red)
-    canvas.drawCircle(
-      routePoints.last,
-      6,
-      Paint()..color = const Color(0xFFDC2626),
-    );
-
-    // Risk markers
-    if (showPrediction) {
-      for (int i = 0; i < _riskMarkers.length; i++) {
-        final m = _riskMarkers[i];
-        final cx = m.c * _cell + _cell / 2 + 10;
-        final cy = m.r * _cell + _cell / 2 + 10;
-
-        // Pulsing circle
-        final markerColor = m.level == _Zone.danger
-            ? const Color(0x4DDC2626)
-            : const Color(0x4DF59E0B);
-        canvas.drawCircle(Offset(cx, cy), 12, Paint()..color = markerColor);
-
-        // Warning text
-        final tp = TextPainter(
-          text: TextSpan(
-            text: '⚠',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: m.level == _Zone.danger
-                  ? const Color(0xFFDC2626)
-                  : const Color(0xFFF59E0B),
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
-
-        // Tooltip on hover
-        if (hoveredMarker == i) {
-          final tooltipW = 110.0;
-          final tooltipH = 28.0;
-          final tooltipX = cx - tooltipW / 2;
-          final tooltipY = cy - 30;
-
-          final rrect = RRect.fromRectAndRadius(
-            Rect.fromLTWH(tooltipX, tooltipY, tooltipW, tooltipH),
-            const Radius.circular(8),
-          );
-          canvas.drawRRect(
-              rrect, Paint()..color = const Color(0xFF0F172A));
-
-          final tooltipTp = TextPainter(
-            text: TextSpan(
-              text: 'Risk Score: ${m.score}%',
-              style: const TextStyle(fontSize: 10, color: Colors.white),
-            ),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          tooltipTp.paint(
-            canvas,
-            Offset(
-              tooltipX + (tooltipW - tooltipTp.width) / 2,
-              tooltipY + (tooltipH - tooltipTp.height) / 2,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapPainter old) =>
-      old.showHeatmap != showHeatmap ||
-      old.showPrediction != showPrediction ||
-      old.routeProgress != routeProgress ||
-      old.hoveredMarker != hoveredMarker;
 }

@@ -1,697 +1,492 @@
+
+
+// import 'package:flutter/material.dart';
+// import 'package:flutter/services.dart' show rootBundle;
+// import 'package:csv/csv.dart';
+// import 'package:latlong2/latlong.dart';
+// import '../../core/widgets/safe_route_map.dart';
+
+// class BusStop {
+//   final String name;
+//   final LatLng coords;
+//   BusStop({required this.name, required this.coords});
+// }
+
+// class NavigationScreen extends StatefulWidget {
+//   const NavigationScreen({super.key});
+
+//   @override
+//   State<NavigationScreen> createState() => _NavigationScreenState();
+// }
+
+// class _NavigationScreenState extends State<NavigationScreen> {
+//   bool _showHeatmap = true;
+//   bool _showRoute = true;
+//   bool _showPolice = true;
+//   String _selectedRouteMode = 'Safest'; // Fastest, Balanced, Safest
+
+//   List<BusStop> _busStops = [];
+//   BusStop? _sourceStop;
+//   BusStop? _destStop;
+  
+//   bool _isLoading = true;
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     _loadCSVData();
+//   }
+
+//   Future<void> _loadCSVData() async {
+//     try {
+//       final String csvString = await rootBundle.loadString('assets/structured_bus_segments.csv');
+//       List<List<dynamic>> csvTable = const CsvToListConverter(eol: '\n').convert(csvString);
+      
+//       if (csvTable.isEmpty) return;
+
+//       final headers = csvTable.first.map((e) => e.toString().trim()).toList();
+//       final stopIdx = headers.indexOf('start_stop_name');
+//       final latIdx = headers.indexOf('start_lat');
+//       final lonIdx = headers.indexOf('start_lon');
+
+//       if (stopIdx == -1 || latIdx == -1 || lonIdx == -1) return;
+
+//       Map<String, BusStop> uniqueStops = {};
+//       for (int i = 1; i < csvTable.length; i++) {
+//         final row = csvTable[i];
+//         if (row.length <= lonIdx) continue;
+        
+//         final stopName = row[stopIdx].toString().trim();
+//         final lat = double.tryParse(row[latIdx].toString());
+//         final lon = double.tryParse(row[lonIdx].toString());
+
+//         if (lat != null && lon != null && stopName.isNotEmpty && !uniqueStops.containsKey(stopName)) {
+//           uniqueStops[stopName] = BusStop(name: stopName, coords: LatLng(lat, lon));
+//         }
+//       }
+//       setState(() {
+//         _busStops = uniqueStops.values.toList();
+//         _isLoading = false;
+//       });
+//     } catch (e) {
+//       debugPrint("CSV Error: $e");
+//       setState(() => _isLoading = false);
+//     }
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       backgroundColor: const Color(0xFFF8FAFC),
+//       body: SafeArea(
+//         child: Row(
+//           children: [
+//             // LEFT SIDEBAR
+//             Container(
+//               width: 380,
+//               padding: const EdgeInsets.all(24),
+//               decoration: BoxDecoration(
+//                 color: Colors.white,
+//                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)],
+//               ),
+//               child: _isLoading 
+//                 ? const Center(child: CircularProgressIndicator())
+//                 : Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       const Text("Plan Your Route", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+//                       const SizedBox(height: 24),
+                      
+//                       // AUTOCOMPLETE SEARCH FIELDS
+//                       _buildSearchField("Start Location", Icons.my_location, true),
+//                       const SizedBox(height: 12),
+//                       _buildSearchField("Destination", Icons.location_on, false),
+                      
+//                       const SizedBox(height: 24),
+                      
+//                       // ROUTE MODES
+//                       const Text("Route Mode", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+//                       const SizedBox(height: 12),
+//                       Row(
+//                         children: [
+//                           _buildRouteModeBtn("Fastest", Icons.flash_on),
+//                           const SizedBox(width: 8),
+//                           _buildRouteModeBtn("Balanced", Icons.balance),
+//                           const SizedBox(width: 8),
+//                           _buildRouteModeBtn("Safest", Icons.shield),
+//                         ],
+//                       ),
+                      
+//                       const SizedBox(height: 24),
+//                       const Divider(),
+//                       const SizedBox(height: 12),
+
+//                       // RISK SCORE & ALERTS
+//                       if (_sourceStop != null && _destStop != null) ...[
+//                         _buildRiskScoreCard(),
+//                         const SizedBox(height: 16),
+//                         _buildRiskAlertBanner(),
+//                         const SizedBox(height: 24),
+//                       ],
+
+//                       // TOGGLES
+//                       const Text("Safety Overlays", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+//                       SwitchListTile(
+//                         contentPadding: EdgeInsets.zero,
+//                         title: const Text("Crime Risk Heatmaps", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+//                         activeColor: Colors.blueAccent,
+//                         value: _showHeatmap,
+//                         onChanged: (val) => setState(() => _showHeatmap = val),
+//                       ),
+//                       SwitchListTile(
+//                         contentPadding: EdgeInsets.zero,
+//                         title: const Text("Police Stations & Safe Zones", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+//                         activeColor: Colors.blueAccent,
+//                         value: _showPolice,
+//                         onChanged: (val) => setState(() => _showPolice = val),
+//                       ),
+//                       SwitchListTile(
+//                         contentPadding: EdgeInsets.zero,
+//                         title: const Text("Show Navigation Polyline", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+//                         activeColor: Colors.blueAccent,
+//                         value: _showRoute,
+//                         onChanged: (val) => setState(() => _showRoute = val),
+//                       ),
+//                     ],
+//                   ),
+//             ),
+
+//             // RIGHT MAP AREA
+//             Expanded(
+//               child: ClipRRect(
+//                 borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), bottomLeft: Radius.circular(30)),
+//                 child: SafeRouteMap(
+//                   sourceCoords: _sourceStop?.coords,
+//                   destCoords: _destStop?.coords,
+//                   showHeatmap: _showHeatmap,
+//                   showPoliceStations: _showPolice,
+//                   showRoute: _showRoute,
+//                   routeColor: _selectedRouteMode == 'Safest' ? Colors.green : Colors.blueAccent,
+//                 ),
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   // UI HELPERS
+//   Widget _buildSearchField(String label, IconData icon, bool isSource) {
+//     return Autocomplete<BusStop>(
+//       optionsBuilder: (TextEditingValue textEditingValue) {
+//         if (textEditingValue.text.isEmpty) return const Iterable<BusStop>.empty();
+//         return _busStops.where((stop) => stop.name.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+//       },
+//       displayStringForOption: (BusStop option) => option.name,
+//       onSelected: (BusStop selection) {
+//         setState(() {
+//           if (isSource) _sourceStop = selection;
+//           else _destStop = selection;
+//         });
+//       },
+//       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+//         return TextField(
+//           controller: textEditingController,
+//           focusNode: focusNode,
+//           decoration: InputDecoration(
+//             labelText: label,
+//             prefixIcon: Icon(icon, color: isSource ? Colors.blue : Colors.red),
+//             filled: true,
+//             fillColor: const Color(0xFFF1F5F9),
+//             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+//             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+//           ),
+//         );
+//       },
+//     );
+//   }
+
+//   Widget _buildRouteModeBtn(String title, IconData icon) {
+//     bool isSelected = _selectedRouteMode == title;
+//     return Expanded(
+//       child: GestureDetector(
+//         onTap: () => setState(() => _selectedRouteMode = title),
+//         child: Container(
+//           padding: const EdgeInsets.symmetric(vertical: 10),
+//           decoration: BoxDecoration(
+//             color: isSelected ? const Color(0xFF1E293B) : Colors.white,
+//             border: Border.all(color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade300),
+//             borderRadius: BorderRadius.circular(10),
+//           ),
+//           child: Column(
+//             children: [
+//               Icon(icon, size: 20, color: isSelected ? Colors.white : Colors.grey.shade600),
+//               const SizedBox(height: 4),
+//               Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey.shade600)),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildRiskScoreCard() {
+//     return Container(
+//       padding: const EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         gradient: LinearGradient(colors: [Colors.green.shade50, Colors.white]),
+//         borderRadius: BorderRadius.circular(16),
+//         border: Border.all(color: Colors.green.shade200),
+//       ),
+//       child: Row(
+//         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//         children: [
+//           const Column(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               Text("Route Risk Score", style: TextStyle(fontSize: 13, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+//               SizedBox(height: 4),
+//               Text("92 / 100", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.green)),
+//             ],
+//           ),
+//           Container(
+//             padding: const EdgeInsets.all(10),
+//             decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), shape: BoxShape.circle),
+//             child: const Icon(Icons.verified_user, color: Colors.green, size: 28),
+//           )
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildRiskAlertBanner() {
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+//       decoration: BoxDecoration(
+//         color: Colors.orange.shade50,
+//         borderRadius: BorderRadius.circular(12),
+//         border: Border.all(color: Colors.orange.shade200),
+//       ),
+//       child: const Row(
+//         children: [
+//           Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+//           SizedBox(width: 12),
+//           Expanded(child: Text("Risk Zone Ahead: Low lighting reported 2km near destination. Rerouting active.", style: TextStyle(fontSize: 12, color: Colors.deepOrange, fontWeight: FontWeight.w600))),
+//         ],
+//       ),
+//     );
+//   }
+// }
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/widgets/map_widget.dart';
-import '../../data/mock_data.dart';
-import '../../providers/app_state_provider.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:csv/csv.dart';
+import 'package:latlong2/latlong.dart';
+import '../../core/widgets/safe_route_map.dart';
 
-class _TransportMode {
-  final String key;
-  final String label;
-  final IconData icon;
-  const _TransportMode(this.key, this.label, this.icon);
-}
-
-const _transportModes = [
-  _TransportMode('bus', 'Bus', Icons.directions_bus),
-  _TransportMode('car', 'Car', Icons.directions_car),
-  _TransportMode('bike', 'Two-wheeler', Icons.two_wheeler),
-  _TransportMode('walk', 'Walking', Icons.directions_walk),
-];
-
-class _RouteMode {
-  final String key;
-  final String label;
-  final IconData icon;
-  final String desc;
-  const _RouteMode(this.key, this.label, this.icon, this.desc);
-}
-
-const _routeModes = [
-  _RouteMode('safest', 'Safest', Icons.shield, 'Avoids all high-risk zones'),
-  _RouteMode(
-      'balanced', 'Balanced', Icons.navigation, 'Balance of safety & speed'),
-  _RouteMode('fastest', 'Fastest', Icons.access_time, 'Shortest travel time'),
-];
-
-class NavigationPage extends ConsumerStatefulWidget {
-  const NavigationPage({super.key});
+class NavigationScreen extends StatefulWidget {
+  const NavigationScreen({super.key});
 
   @override
-  ConsumerState<NavigationPage> createState() => _NavigationPageState();
+  State<NavigationScreen> createState() => _NavigationScreenState();
 }
+class _SimpleStop {
+  final String name;
+  final LatLng coords;
 
-class _NavigationPageState extends ConsumerState<NavigationPage> {
-  late String _source;
-  late String _destination;
-  String _transport = 'bus';
-  String _busType = 'all';
-  bool _navigating = false;
+  _SimpleStop({required this.name, required this.coords});
+}
+class _NavigationScreenState extends State<NavigationScreen> {
+  bool _showHeatmap = true;
+  bool _showRoute = true;
+  bool _showPolice = true;
+  String _selectedRouteMode = 'Safest';
+
+  List<_SimpleStop> _busStops = [];
+_SimpleStop? _sourceStop;
+_SimpleStop? _destStop;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final rs = ref.read(routeProvider);
-    _source = rs.source;
-    _destination = rs.destination;
+    _loadCSVData();
   }
 
-  void _handleStart() {
-    ref.read(routeProvider.notifier).setSource(_source);
-    ref.read(routeProvider.notifier).setDestination(_destination);
-    setState(() => _navigating = true);
+  Future<void> _loadCSVData() async {
+    try {
+      final String csvString = await rootBundle.loadString('assets/structured_bus_segments.csv');
+      List<List<dynamic>> csvTable = const CsvToListConverter(eol: '\n').convert(csvString);
+      if (csvTable.isEmpty) return;
+      final headers = csvTable.first.map((e) => e.toString().trim()).toList();
+      final stopIdx = headers.indexOf('start_stop_name');
+      final latIdx = headers.indexOf('start_lat');
+      final lonIdx = headers.indexOf('start_lon');
+
+      Map<String, _SimpleStop> uniqueStops = {};
+      for (int i = 1; i < csvTable.length; i++) {
+        final row = csvTable[i];
+        final stopName = row[stopIdx].toString().trim();
+        final lat = double.tryParse(row[latIdx].toString());
+        final lon = double.tryParse(row[lonIdx].toString());
+        if (lat != null && lon != null && stopName.isNotEmpty && !uniqueStops.containsKey(stopName)) {
+          uniqueStops[stopName] = _SimpleStop(
+  name: stopName,
+  coords: LatLng(lat, lon),
+);
+        }
+      }
+      setState(() { _busStops = uniqueStops.values.toList(); _isLoading = false; });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final routeState = ref.watch(routeProvider);
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-
-    if (isDesktop) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 350, child: _buildControls(routeState)),
-          const SizedBox(width: 16),
-          Expanded(child: _buildMapSection()),
-        ],
-      );
-    }
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildControls(routeState),
-          const SizedBox(height: 16),
-          SizedBox(height: 500, child: _buildMapSection()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControls(RouteState routeState) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Hero card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Smart Route Scanner',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'AI-powered navigation with crime & transport intelligence',
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.mutedForeground),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.phone_android,
-                      color: AppColors.primary, size: 32),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Route planner
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Plan Your Route',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-
-                // Transport mode
-                Row(
-                  children: _transportModes.map((m) {
-                    final isSelected = _transport == m.key;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () =>
-                            setState(() => _transport = m.key),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.muted.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: m.key == 'bus' && !isSelected
-                                ? Border.all(
-                                    color:
-                                        AppColors.primary.withOpacity(0.2))
-                                : null,
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(m.icon,
-                                  size: 18,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppColors.foreground),
-                              const SizedBox(height: 4),
-                              Text(
-                                m.label,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppColors.foreground,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Bus type filter
-                if (_transport == 'bus') ...[
-                  const Text('Bus Type',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.mutedForeground)),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _busType,
-                        isExpanded: true,
-                        style: const TextStyle(
-                            fontSize: 13, color: AppColors.foreground),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'all', child: Text('All Types')),
-                          DropdownMenuItem(
-                              value: 'ordinary',
-                              child: Text('Ordinary')),
-                          DropdownMenuItem(
-                              value: 'express', child: Text('Express')),
-                          DropdownMenuItem(
-                              value: 'ac', child: Text('Deluxe/AC')),
-                          DropdownMenuItem(
-                              value: 'mini', child: Text('Mini Bus')),
-                          DropdownMenuItem(
-                              value: 'special',
-                              child: Text('Special/Event')),
-                        ],
-                        onChanged: (v) =>
-                            setState(() => _busType = v ?? 'all'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Source / Destination
-                _locationField(
-                  icon: Icons.location_on,
-                  iconColor: AppColors.safe,
-                  hint: 'Source location',
-                  value: _source,
-                  onChanged: (v) => _source = v,
-                ),
-                const SizedBox(height: 10),
-                _locationField(
-                  icon: Icons.location_on,
-                  iconColor: AppColors.danger,
-                  hint: 'Destination',
-                  value: _destination,
-                  onChanged: (v) => _destination = v,
-                ),
-                const SizedBox(height: 16),
-
-                // Route mode
-                const Text('Route Mode',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.mutedForeground)),
-                const SizedBox(height: 8),
-                ..._routeModes.map((m) {
-                  final isSelected = routeState.mode == m.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: GestureDetector(
-                      onTap: () => ref
-                          .read(routeProvider.notifier)
-                          .setMode(m.key),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.muted.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(m.icon,
-                                size: 18,
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppColors.foreground),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  m.label,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.foreground,
-                                  ),
-                                ),
-                                Text(
-                                  m.desc,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: isSelected
-                                        ? Colors.white70
-                                        : AppColors.mutedForeground,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 16),
-
-                // Start button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _handleStart,
-                    icon: const Icon(Icons.arrow_forward, size: 18),
-                    label: const Text('Start Safe Navigation'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Route Risk Score
-          _buildRouteRiskScore(),
-          const SizedBox(height: 12),
-
-          // Stop Intelligence (bus only)
-          if (_transport == 'bus') _buildStopIntelligence(),
-        ],
-      ),
-    );
-  }
-
-  Widget _locationField({
-    required IconData icon,
-    required Color iconColor,
-    required String hint,
-    required String value,
-    required ValueChanged<String> onChanged,
-  }) {
-    return TextFormField(
-      initialValue: value,
-      onChanged: onChanged,
-      style: const TextStyle(fontSize: 13),
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 18, color: iconColor),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRouteRiskScore() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Route Risk Score',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.safe.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  '72%',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.safe,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Moderate-Safe',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500)),
-                  Text('ETA: 18 min · 3.2 km',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.mutedForeground)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.muted.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('🤖 AI Insight',
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500)),
-                SizedBox(height: 4),
-                Text(
-                  'This route avoids 3 high-risk zones and follows well-lit streets. Risk is lowest until 10 PM.',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.mutedForeground),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStopIntelligence() {
-    final stops = MockData.stopSafety.take(3).toList();
-    final crowd = MockData.crowdData.take(3).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.directions_bus, size: 16, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text('Stop Intelligence',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...stops.map((s) => Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.muted.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Column( // CHANGED Row to Column for Note 20
+          children: [
+            // TOP SECTION (Formerly Sidebar) - Now Scrollable to prevent overflow
+            Flexible(
+              flex: 1, // Takes up appropriate space based on content
+              child: SingleChildScrollView( // FIX: Prevents bottom overflow
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: s.safety >= 80
-                            ? AppColors.safe
-                            : s.safety >= 60
-                                ? AppColors.warning
-                                : AppColors.danger,
-                        shape: BoxShape.circle,
-                      ),
+                    const Text("Plan Your Route", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 16),
+                    _buildSearchField("Start Location", Icons.my_location, true),
+                    const SizedBox(height: 10),
+                    _buildSearchField("Destination", Icons.location_on, false),
+                    const SizedBox(height: 16),
+                    const Text("Route Mode", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildRouteModeBtn("Fastest", Icons.flash_on),
+                        const SizedBox(width: 8),
+                        _buildRouteModeBtn("Balanced", Icons.balance),
+                        const SizedBox(width: 8),
+                        _buildRouteModeBtn("Safest", Icons.shield),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(s.stop,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w500)),
+                    if (_sourceStop != null && _destStop != null) ...[
+                      const SizedBox(height: 16),
+                      _buildRiskScoreCard(),
+                      const SizedBox(height: 10),
+                      _buildRiskAlertBanner(),
+                    ],
+                    const SizedBox(height: 16),
+                    const Text("Safety Overlays", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                    SwitchListTile(
+                      dense: true, contentPadding: EdgeInsets.zero,
+                      title: const Text("Crime Risk Heatmaps", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      value: _showHeatmap, onChanged: (val) => setState(() => _showHeatmap = val),
                     ),
-                    if (s.cctv)
-                      Container(
-                        margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('CCTV',
-                            style: TextStyle(
-                                fontSize: 9, color: AppColors.primary)),
-                      ),
-                    if (s.police)
-                      Container(
-                        margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.safe.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('Police',
-                            style: TextStyle(
-                                fontSize: 9, color: AppColors.safe)),
-                      ),
-                    Text(
-                      '${s.safety}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: s.safety >= 80
-                            ? AppColors.safe
-                            : s.safety >= 60
-                                ? AppColors.warning
-                                : AppColors.danger,
-                      ),
+                    SwitchListTile(
+                      dense: true, contentPadding: EdgeInsets.zero,
+                      title: const Text("Safe Zones", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      value: _showPolice, onChanged: (val) => setState(() => _showPolice = val),
                     ),
                   ],
                 ),
-              )),
+              ),
+            ),
 
-          const SizedBox(height: 8),
-          const Divider(),
-          const SizedBox(height: 8),
+            // BOTTOM MAP AREA
+            Expanded(
+              flex: 1, // Map takes up the remaining half of the screen
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+                child: SafeRouteMap(
+                  sourceCoords: _sourceStop?.coords,
+                  destCoords: _destStop?.coords,
+                  showHeatmap: _showHeatmap,
+                  showPoliceStations: _showPolice,
+                  showRoute: _showRoute,
+                  routeColor: _selectedRouteMode == 'Safest' ? Colors.green : Colors.blueAccent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          const Row(
+  Widget _buildSearchField(String label, IconData icon, bool isSource) {
+    return Autocomplete<_SimpleStop>(
+      optionsBuilder: (textValue) => textValue.text.isEmpty ? const [] : _busStops.where((s) => s.name.toLowerCase().contains(textValue.text.toLowerCase())),
+      displayStringForOption: (s) => s.name,
+      onSelected: (selection) => setState(() => isSource ? _sourceStop = selection : _destStop = selection),
+      fieldViewBuilder: (context, controller, node, onSubmitted) {
+        return TextField(
+          controller: controller, focusNode: node,
+          decoration: InputDecoration(
+            labelText: label, prefixIcon: Icon(icon, color: isSource ? Colors.blue : Colors.red, size: 20),
+            filled: true, fillColor: const Color(0xFFF1F5F9),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRouteModeBtn(String title, IconData icon) {
+    bool isSelected = _selectedRouteMode == title;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedRouteMode = title),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF1E293B) : Colors.white,
+            border: Border.all(color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
             children: [
-              Icon(Icons.people, size: 14, color: AppColors.foreground),
-              SizedBox(width: 4),
-              Text('Crowd Levels',
-                  style:
-                      TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+              Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.grey.shade600),
+              Text(title, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey.shade600)),
             ],
           ),
-          const SizedBox(height: 8),
-          ...crowd.map((c) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(c.stop,
-                        style: const TextStyle(fontSize: 11)),
-                    Text(
-                      '${c.percent}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: c.level == 'high'
-                            ? AppColors.danger
-                            : c.level == 'moderate'
-                                ? AppColors.warning
-                                : AppColors.safe,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRiskScoreCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade50, Colors.white]), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.shade200)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("Safety Score", style: TextStyle(fontSize: 11, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+            Text("92 / 100", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green)),
+          ]),
+          Icon(Icons.verified_user, color: Colors.green, size: 24)
         ],
       ),
     );
   }
 
-  Widget _buildMapSection() {
-    return Column(
-      children: [
-        const Expanded(
-          child: MapWidget(
-            showHeatmap: true,
-            showRoute: true,
-            showPoliceStations: true,
-          ),
-        ),
-        if (_navigating) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.danger.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: AppColors.danger.withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.warning_amber,
-                              size: 16, color: AppColors.danger),
-                          SizedBox(width: 4),
-                          Text(
-                            'High Risk Zone Ahead',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.danger,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Consider rerouting via Oak Street',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.mutedForeground),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                  child: const Text('Reroute'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
+  Widget _buildRiskAlertBanner() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+      child: const Row(children: [
+        Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+        SizedBox(width: 8),
+        Expanded(child: Text("Low lighting reported 2km ahead.", style: TextStyle(fontSize: 11, color: Colors.deepOrange, fontWeight: FontWeight.w600))),
+      ]),
     );
   }
 }

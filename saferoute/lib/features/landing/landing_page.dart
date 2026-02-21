@@ -20,7 +20,7 @@ class LandingPage extends StatelessWidget {
               children: const [
                 SizedBox(height: 64), // space for navbar
                 HeroSection(),
-                LiveMapSection(),
+                MapComponent(),
                 ProblemSolutionSection(),
                 FeaturesSection(),
                 HowItWorksSection(),

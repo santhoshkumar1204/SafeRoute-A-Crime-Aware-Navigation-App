@@ -1,246 +1,6 @@
-// import 'package:flutter/material.dart';
-// import '../../core/constants/app_colors.dart';
-// import '../../core/widgets/map_widget.dart';
-
-// class HeatmapPage extends StatefulWidget {
-//   const HeatmapPage({super.key});
-
-//   @override
-//   State<HeatmapPage> createState() => _HeatmapPageState();
-// }
-
-// class _HeatmapPageState extends State<HeatmapPage> {
-//   bool _showHeatmap = true;
-//   bool _showAI = true;
-//   String _timeFilter = 'all';
-//   String _severity = 'all';
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    
-//     // We pass the filter states to MapWidget
-//     final map = MapWidget(
-//       showHeatmap: _showHeatmap,
-//       showRoute: false,
-//       showPoliceStations: true,
-//       height: isDesktop ? double.infinity : 450,
-//     );
-
-//     if (isDesktop) {
-//       return Row(
-//         crossAxisAlignment: CrossAxisAlignment.start,
-//         children: [
-//           Expanded(child: map),
-//           const SizedBox(width: 16),
-//           SizedBox(width: 280, child: SingleChildScrollView(child: _buildFilters())),
-//         ],
-//       );
-//     }
-
-//     return SingleChildScrollView(
-//       child: Column(
-//         children: [
-//           map,
-//           const SizedBox(height: 16),
-//           _buildFilters(),
-//         ],
-//       ),
-//     );
-//   }
-
-//   Widget _buildFilters() {
-//     return Column(
-//       children: [
-//         // Toggle filters
-//         _card(
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               const Text('Filters',
-//                   style:
-//                       TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-//               const SizedBox(height: 16),
-//               _toggle(
-//                 label: 'Crime Heatmap',
-//                 icon: Icons.layers,
-//                 active: _showHeatmap,
-//                 onToggle: () =>
-//                     setState(() => _showHeatmap = !_showHeatmap),
-//               ),
-//               const SizedBox(height: 12),
-//               _toggle(
-//                 label: 'AI Prediction',
-//                 icon: Icons.wb_sunny,
-//                 active: _showAI,
-//                 onToggle: () => setState(() => _showAI = !_showAI),
-//               ),
-//             ],
-//           ),
-//         ),
-//         const SizedBox(height: 12),
-
-//         // Time filter
-//         _card(
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               const Row(
-//                 children: [
-//                   Icon(Icons.access_time, size: 16),
-//                   SizedBox(width: 8),
-//                   Text('Time Filter',
-//                       style: TextStyle(
-//                           fontWeight: FontWeight.w600, fontSize: 14)),
-//                 ],
-//               ),
-//               const SizedBox(height: 12),
-//               ...['all', 'morning', 'afternoon', 'evening', 'night']
-//                   .map((t) => _filterButton(
-//                         label:
-//                             t == 'all' ? 'All Day' : t[0].toUpperCase() + t.substring(1),
-//                         isActive: _timeFilter == t,
-//                         onTap: () => setState(() => _timeFilter = t),
-//                       )),
-//             ],
-//           ),
-//         ),
-//         const SizedBox(height: 12),
-
-//         // Severity
-//         _card(
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               const Text('Severity',
-//                   style:
-//                       TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-//               const SizedBox(height: 12),
-//               ...['all', 'low', 'moderate', 'high'].map((s) =>
-//                   _filterButton(
-//                     label: s == 'all'
-//                         ? 'All Levels'
-//                         : s[0].toUpperCase() + s.substring(1),
-//                     isActive: _severity == s,
-//                     onTap: () => setState(() => _severity = s),
-//                   )),
-//             ],
-//           ),
-//         ),
-//         const SizedBox(height: 12),
-
-//         // Download
-//         SizedBox(
-//           width: double.infinity,
-//           child: ElevatedButton.icon(
-//             onPressed: () {},
-//             icon: const Icon(Icons.download, size: 18),
-//             label: const Text('Download PDF Report'),
-//             style: ElevatedButton.styleFrom(
-//               backgroundColor: AppColors.primary,
-//               foregroundColor: Colors.white,
-//               padding: const EdgeInsets.symmetric(vertical: 14),
-//               shape: RoundedRectangleBorder(
-//                   borderRadius: BorderRadius.circular(12)),
-//             ),
-//           ),
-//         ),
-//       ],
-//     );
-//   }
-
-//   Widget _card({required Widget child}) {
-//     return Container(
-//       width: double.infinity,
-//       padding: const EdgeInsets.all(20),
-//       decoration: BoxDecoration(
-//         color: AppColors.card,
-//         borderRadius: BorderRadius.circular(16),
-//         boxShadow: [
-//           BoxShadow(
-//             color: Colors.black.withOpacity(0.04),
-//             blurRadius: 8,
-//             offset: const Offset(0, 2),
-//           ),
-//         ],
-//       ),
-//       child: child,
-//     );
-//   }
-
-//   Widget _toggle({
-//     required String label,
-//     required IconData icon,
-//     required bool active,
-//     required VoidCallback onToggle,
-//   }) {
-//     return GestureDetector(
-//       onTap: onToggle,
-//       child: Row(
-//         children: [
-//           Icon(icon, size: 16, color: AppColors.foreground),
-//           const SizedBox(width: 8),
-//           Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
-//           Container(
-//             width: 36,
-//             height: 20,
-//             decoration: BoxDecoration(
-//               color: active ? AppColors.primary : AppColors.muted,
-//               borderRadius: BorderRadius.circular(10),
-//             ),
-//             child: AnimatedAlign(
-//               duration: const Duration(milliseconds: 200),
-//               alignment:
-//                   active ? Alignment.centerRight : Alignment.centerLeft,
-//               child: Container(
-//                 width: 16,
-//                 height: 16,
-//                 margin: const EdgeInsets.symmetric(horizontal: 2),
-//                 decoration: const BoxDecoration(
-//                   color: Colors.white,
-//                   shape: BoxShape.circle,
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   Widget _filterButton({
-//     required String label,
-//     required bool isActive,
-//     required VoidCallback onTap,
-//   }) {
-//     return Padding(
-//       padding: const EdgeInsets.only(bottom: 4),
-//       child: SizedBox(
-//         width: double.infinity,
-//         child: TextButton(
-//           onPressed: onTap,
-//           style: TextButton.styleFrom(
-//             backgroundColor:
-//                 isActive ? AppColors.primary : Colors.transparent,
-//             foregroundColor:
-//                 isActive ? Colors.white : AppColors.foreground,
-//             padding:
-//                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-//             shape: RoundedRectangleBorder(
-//                 borderRadius: BorderRadius.circular(8)),
-//             alignment: Alignment.centerLeft,
-//           ),
-//           child: Text(label, style: const TextStyle(fontSize: 13)),
-//         ),
-//       ),
-//     );
-//   }
-// }
-
-
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/widgets/map_widget.dart';
+import '../../core/widgets/safe_route_map.dart';
 
 class HeatmapPage extends StatefulWidget {
   const HeatmapPage({super.key});
@@ -250,73 +10,176 @@ class HeatmapPage extends StatefulWidget {
 }
 
 class _HeatmapPageState extends State<HeatmapPage> {
+  // Filters State
   bool _showHeatmap = true;
   bool _showPolice = true;
+  bool _showAI = true;
   String _timeFilter = 'all';
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-
-    final mapDisplay = MapWidget(
-      showHeatmap: _showHeatmap,
-      showPoliceStations: _showPolice,
-      showRoute: false,
-      height: isDesktop ? double.infinity : 400,
-      isInteractive: false, // Heatmap is usually for viewing, not routing
-    );
-
-    if (isDesktop) {
-      return Row(
+    return Scaffold(
+      body: Stack(
         children: [
-          Expanded(child: mapDisplay),
-          const SizedBox(width: 16),
-          SizedBox(width: 300, child: _buildSidebar()),
-        ],
-      );
-    }
+          // 1. FULL SCREEN MAP BACKGROUND
+          SafeRouteMap(
+  showHeatmap: _showHeatmap,
+  showRoute: false,
+  showPoliceStations: _showPolice,
+),
 
+          // 2. TOP HEADER CARD (Title and Stats)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 15,
+            right: 15,
+            child: _buildHeaderCard(),
+          ),
+
+          // 3. RIGHT SIDE LAYER TOGGLES
+          Positioned(
+            right: 15,
+            top: MediaQuery.of(context).padding.top + 100,
+            child: _buildLayerControls(),
+          ),
+
+          // 4. BOTTOM TIME FILTER
+          Positioned(
+            bottom: 30,
+            left: 0,
+            right: 0,
+            child: _buildTimeFilterDock(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.security, color: Colors.red, size: 24),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Safety Analytics', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('Live Chennai Crime Data', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () {}, // Future PDF Download logic
+            icon: const Icon(Icons.download_for_offline, color: AppColors.primary),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLayerControls() {
     return Column(
       children: [
-        mapDisplay,
-        Expanded(child: SingleChildScrollView(child: _buildSidebar())),
+        _layerButton(
+          icon: Icons.layers,
+          label: 'Heatmap',
+          active: _showHeatmap,
+          onTap: () => setState(() => _showHeatmap = !_showHeatmap),
+        ),
+        const SizedBox(height: 10),
+        _layerButton(
+          icon: Icons.local_police,
+          label: 'Police',
+          active: _showPolice,
+          onTap: () => setState(() => _showPolice = !_showPolice),
+        ),
+        const SizedBox(height: 10),
+        _layerButton(
+          icon: Icons.psychology,
+          label: 'AI Pred.',
+          active: _showAI,
+          onTap: () => setState(() => _showAI = !_showAI),
+        ),
       ],
     );
   }
 
-  Widget _buildSidebar() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Map Layers', style: TextStyle(fontWeight: FontWeight.bold)),
-          SwitchListTile(
-            title: const Text('Crime Heatmap', style: TextStyle(fontSize: 14)),
-            value: _showHeatmap,
-            activeColor: AppColors.primary,
-            onChanged: (v) => setState(() => _showHeatmap = v),
-          ),
-          SwitchListTile(
-            title: const Text('Police Stations', style: TextStyle(fontSize: 14)),
-            value: _showPolice,
-            activeColor: Colors.blue,
-            onChanged: (v) => setState(() => _showPolice = v),
-          ),
-          const Divider(),
-          const Text('Time of Day', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            children: ['all', 'morning', 'evening', 'night'].map((t) {
-              return ChoiceChip(
-                label: Text(t),
-                selected: _timeFilter == t,
-                onSelected: (s) => setState(() => _timeFilter = t),
-              );
-            }).toList(),
-          ),
-        ],
+  Widget _layerButton({required IconData icon, required String label, required bool active, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 65,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: active ? Colors.white : Colors.black87, size: 22),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(color: active ? Colors.white : Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeFilterDock() {
+    final times = [
+      {'key': 'all', 'label': 'All Day', 'icon': Icons.wb_sunny_outlined},
+      {'key': 'morning', 'label': 'Morning', 'icon': Icons.wb_twilight},
+      {'key': 'evening', 'label': 'Evening', 'icon': Icons.nightlight_round},
+      {'key': 'night', 'label': 'Late Night', 'icon': Icons.bedtime},
+    ];
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 15)],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: times.map((t) {
+            bool isSelected = _timeFilter == t['key'];
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ChoiceChip(
+                showCheckmark: false,
+                label: Text(t['label'] as String),
+                avatar: Icon(t['icon'] as IconData, size: 16, color: isSelected ? Colors.white : Colors.black54),
+                selected: isSelected,
+                selectedColor: AppColors.primary,
+                backgroundColor: Colors.transparent,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : Colors.black87,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide.none),
+                onSelected: (s) => setState(() => _timeFilter = t['key'] as String),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

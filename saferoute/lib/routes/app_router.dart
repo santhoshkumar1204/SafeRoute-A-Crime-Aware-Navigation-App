@@ -76,7 +76,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/navigation',
-            builder: (context, state) => const NavigationPage(),
+            builder: (context, state) => const NavigationScreen(),
           ),
           GoRoute(
             path: '/heatmap',

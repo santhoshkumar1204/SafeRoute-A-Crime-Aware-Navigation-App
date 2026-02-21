@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/stat_card.dart';
 import '../../core/widgets/chart_placeholder.dart';
-import '../../core/widgets/map_widget.dart';
+import '../../core/widgets/safe_route_map.dart';
 import '../../data/mock_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_state_provider.dart';
@@ -182,13 +182,14 @@ class DashboardHome extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         const SizedBox(height: 12),
-        MapWidget(
-          showHeatmap: true,
-          showRoute: true,
-          showPoliceStations: false,
-          height: 350,
-          isInteractive: true, // Enables the source/destination picking
-        ),
+        SizedBox(
+  height: 350,
+  child: SafeRouteMap(
+    showHeatmap: true,
+    showRoute: true,
+    showPoliceStations: false,
+  ),
+),
       ],
     );
   }
