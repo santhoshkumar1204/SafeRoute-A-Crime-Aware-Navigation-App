@@ -7,6 +7,7 @@ import '../../core/widgets/map_widget.dart';
 import '../../data/mock_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_state_provider.dart';
+import '../../providers/firebase_providers.dart';
 
 class DashboardHome extends ConsumerWidget {
   const DashboardHome({super.key});
@@ -118,7 +119,7 @@ class DashboardHome extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Green Mobility
-          _buildGreenMobility(),
+          _buildGreenMobility(ref),
           const SizedBox(height: 24),
         ],
       ),
@@ -472,7 +473,8 @@ class DashboardHome extends ConsumerWidget {
     );
   }
 
-  Widget _buildGreenMobility() {
+  Widget _buildGreenMobility(WidgetRef ref) {
+    final sustainAsync = ref.watch(sustainabilityStreamProvider);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -496,13 +498,20 @@ class DashboardHome extends ConsumerWidget {
           const SizedBox(height: 16),
           LayoutBuilder(builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 400;
-            const green = MockData.greenData;
+            final green = sustainAsync.when(
+              data: (s) => s,
+              loading: () => null,
+              error: (_, __) => null,
+            );
+            final co2 = green?.totalCO2Saved.toInt() ?? MockData.greenData.co2Saved;
+            final fuel = green?.fuelSavedLiters ?? MockData.greenData.fuelSaved;
+            final trips = green?.busTripsCount ?? MockData.greenData.publicTransportTrips;
+            final trees = green?.treesEquivalent ?? MockData.greenData.treesEquivalent;
             final items = [
-              _MiniStat('CO₂ Saved', '${green.co2Saved} kg'),
-              _MiniStat('Fuel Saved', '${green.fuelSaved} L'),
-              _MiniStat(
-                  'Public Transport Trips', '${green.publicTransportTrips}'),
-              _MiniStat('Trees Equivalent', '${green.treesEquivalent}'),
+              _MiniStat('CO₂ Saved', '$co2 kg'),
+              _MiniStat('Fuel Saved', '$fuel L'),
+              _MiniStat('Public Transport Trips', '$trips'),
+              _MiniStat('Trees Equivalent', '$trees'),
             ];
 
             if (isWide) {

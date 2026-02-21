@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/widgets/map_widget.dart';
 import '../../data/mock_data.dart';
 import '../../providers/app_state_provider.dart';
+import '../../providers/firebase_providers.dart';
 
 class _TransportMode {
   final String key;
@@ -60,6 +61,14 @@ class _NavigationPageState extends ConsumerState<NavigationPage> {
     ref.read(routeProvider.notifier).setSource(_source);
     ref.read(routeProvider.notifier).setDestination(_destination);
     setState(() => _navigating = true);
+
+    // Save the trip to Firestore
+    ref.read(tripSaveProvider.notifier).save(
+          source: _source,
+          destination: _destination,
+          transportType: _transport,
+          riskScore: 72,
+        );
   }
 
   @override

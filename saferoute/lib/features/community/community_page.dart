@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
-import '../../data/mock_data.dart';
+import '../../providers/firebase_providers.dart';
 
 const _categories = [
   'All',
@@ -12,23 +14,34 @@ const _categories = [
   'Theft',
 ];
 
-class CommunityPage extends StatefulWidget {
+class CommunityPage extends ConsumerStatefulWidget {
   const CommunityPage({super.key});
 
   @override
-  State<CommunityPage> createState() => _CommunityPageState();
+  ConsumerState<CommunityPage> createState() => _CommunityPageState();
 }
 
-class _CommunityPageState extends State<CommunityPage> {
+class _CommunityPageState extends ConsumerState<CommunityPage> {
   String _filter = 'All';
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return DateFormat('MMM d').format(dt);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filter == 'All'
-        ? MockData.communityReports
-        : MockData.communityReports
-            .where((r) => r.category == _filter)
-            .toList();
+    final reportsAsync = ref.watch(reportsStreamProvider);
+
+    return reportsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
+      data: (allReports) {
+        final filtered = _filter == 'All'
+            ? allReports
+            : allReports.where((r) => r.category == _filter).toList();
 
     return SingleChildScrollView(
       child: Column(
@@ -50,8 +63,8 @@ class _CommunityPageState extends State<CommunityPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.filter_list,
                         size: 16, color: AppColors.mutedForeground),
                     SizedBox(width: 8),
@@ -121,6 +134,8 @@ class _CommunityPageState extends State<CommunityPage> {
               iconColor = AppColors.primary;
             }
 
+            final timeAgo = _formatTimeAgo(r.timestamp);
+
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
@@ -171,13 +186,13 @@ class _CommunityPageState extends State<CommunityPage> {
                                     color: iconColor),
                               ),
                             ),
-                            Text(r.time,
+                            Text(timeAgo,
                                 style: const TextStyle(
                                     fontSize: 10,
                                     color: AppColors.mutedForeground)),
-                            Row(
+                            const Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: const [
+                              children: [
                                 Icon(Icons.visibility_off,
                                     size: 12,
                                     color: AppColors.mutedForeground),
@@ -191,7 +206,7 @@ class _CommunityPageState extends State<CommunityPage> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(r.desc,
+                        Text(r.description,
                             style: const TextStyle(
                                 fontSize: 13,
                                 color: AppColors.mutedForeground)),
@@ -221,6 +236,8 @@ class _CommunityPageState extends State<CommunityPage> {
           const SizedBox(height: 24),
         ],
       ),
+    );
+      },
     );
   }
 }

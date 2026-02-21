@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
+import '../../providers/firebase_providers.dart';
 
 const _categories = [
   'Theft', 'Assault', 'Vandalism', 'Harassment',
@@ -7,20 +10,14 @@ const _categories = [
   'Bus Delay', 'Infrastructure Complaint', 'Other',
 ];
 
-final _dummyReports = [
-  {'id': 1, 'category': 'Theft', 'severity': 3, 'desc': 'Bike stolen near the park entrance', 'time': '15 min ago', 'anonymous': true},
-  {'id': 2, 'category': 'Suspicious Activity', 'severity': 2, 'desc': 'Unknown person loitering near school', 'time': '1 hr ago', 'anonymous': false},
-  {'id': 3, 'category': 'Vandalism', 'severity': 1, 'desc': 'Graffiti on main street wall', 'time': '3 hrs ago', 'anonymous': true},
-];
-
-class ReportPage extends StatefulWidget {
+class ReportPage extends ConsumerStatefulWidget {
   const ReportPage({super.key});
 
   @override
-  State<ReportPage> createState() => _ReportPageState();
+  ConsumerState<ReportPage> createState() => _ReportPageState();
 }
 
-class _ReportPageState extends State<ReportPage> {
+class _ReportPageState extends ConsumerState<ReportPage> {
   String _category = '';
   int _severity = 3;
   String _desc = '';
@@ -29,17 +26,32 @@ class _ReportPageState extends State<ReportPage> {
   bool _submitted = false;
 
   Future<void> _handleSubmit() async {
+    if (_category.isEmpty || _desc.isEmpty) return;
     setState(() => _submitting = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _submitting = false;
-      _submitted = true;
-      _category = '';
-      _desc = '';
-      _severity = 3;
-    });
-    Future.delayed(const Duration(seconds: 3),
-        () => mounted ? setState(() => _submitted = false) : null);
+    try {
+      await ref.read(reportSubmissionProvider.notifier).submit(
+            category: _category,
+            description: _desc,
+            severity: _severity,
+            location: 'Auto-detected: Central Park, NY',
+          );
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _submitted = true;
+        _category = '';
+        _desc = '';
+        _severity = 3;
+      });
+      Future.delayed(const Duration(seconds: 3),
+          () => mounted ? setState(() => _submitted = false) : null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to submit: $e')),
+      );
+    }
   }
 
   @override
@@ -211,12 +223,12 @@ class _ReportPageState extends State<ReportPage> {
                     style: BorderStyle.solid,
                     width: 2),
               ),
-              child: Column(
+              child: const Column(
                 children: [
                   Icon(Icons.camera_alt,
                       size: 32, color: AppColors.mutedForeground),
-                  const SizedBox(height: 8),
-                  const Text('Click to upload or drag & drop',
+                  SizedBox(height: 8),
+                  Text('Click to upload or drag & drop',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.mutedForeground)),
                 ],
@@ -248,7 +260,7 @@ class _ReportPageState extends State<ReportPage> {
                 color: AppColors.safe.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
+              child: const Text(
                 '✓ Report submitted successfully!',
                 style: TextStyle(
                   fontSize: 13,
@@ -312,13 +324,30 @@ class _ReportPageState extends State<ReportPage> {
   }
 
   Widget _buildRecentReports() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Recent Community Reports',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-        const SizedBox(height: 12),
-        ..._dummyReports.map((r) => Container(
+    final reportsAsync = ref.watch(reportsStreamProvider);
+
+    return reportsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Error: $e'),
+      data: (reports) {
+        final recent = reports.take(10).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Recent Community Reports (${recent.length})',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            const SizedBox(height: 12),
+            if (recent.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text('No reports yet.',
+                      style: TextStyle(fontSize: 13, color: AppColors.mutedForeground)),
+                ),
+              ),
+            ...recent.map((r) {
+              final timeAgo = _formatTimeAgo(r.timestamp);
+              return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -342,7 +371,7 @@ class _ReportPageState extends State<ReportPage> {
                       color: AppColors.danger.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.warning_amber,
+                    child: const Icon(Icons.warning_amber,
                         size: 20, color: AppColors.danger),
                   ),
                   const SizedBox(width: 12),
@@ -361,37 +390,22 @@ class _ReportPageState extends State<ReportPage> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                r['category'] as String,
-                                style: TextStyle(
+                                r.category,
+                                style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.danger),
                               ),
                             ),
-                            Text(r['time'] as String,
+                            Text(timeAgo,
                                 style: const TextStyle(
                                     fontSize: 10,
                                     color: AppColors.mutedForeground)),
-                            if (r['anonymous'] == true)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Icon(Icons.visibility_off,
-                                      size: 12,
-                                      color: AppColors.mutedForeground),
-                                  SizedBox(width: 2),
-                                  Text('Anon',
-                                      style: TextStyle(
-                                          fontSize: 10,
-                                          color:
-                                              AppColors.mutedForeground)),
-                                ],
-                              ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          r['desc'] as String,
+                          r.description,
                           style: const TextStyle(
                               fontSize: 13,
                               color: AppColors.mutedForeground),
@@ -401,8 +415,18 @@ class _ReportPageState extends State<ReportPage> {
                   ),
                 ],
               ),
-            )),
-      ],
+            );
+            }),
+          ],
+        );
+      },
     );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return DateFormat('MMM d').format(dt);
   }
 }

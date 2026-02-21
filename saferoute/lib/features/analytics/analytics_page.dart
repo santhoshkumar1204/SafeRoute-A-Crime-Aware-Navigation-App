@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/stat_card.dart';
 import '../../core/widgets/chart_placeholder.dart';
 import '../../data/mock_data.dart';
+import '../../providers/firebase_providers.dart';
 
-class AnalyticsPage extends StatelessWidget {
+class AnalyticsPage extends ConsumerWidget {
   const AnalyticsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
 
     return SingleChildScrollView(
@@ -16,7 +18,7 @@ class AnalyticsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Stats
-          _buildStatsGrid(isDesktop),
+          _buildStatsGrid(isDesktop, ref),
           const SizedBox(height: 16),
 
           // Crime Analytics header
@@ -59,11 +61,11 @@ class AnalyticsPage extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Transport Analytics header
-          Row(
+          const Row(
             children: [
               Icon(Icons.directions_bus, size: 16, color: AppColors.primary),
-              const SizedBox(width: 8),
-              const Text('Transport Analytics',
+              SizedBox(width: 8),
+              Text('Transport Analytics',
                   style:
                       TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             ],
@@ -121,22 +123,35 @@ class AnalyticsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsGrid(bool isDesktop) {
+  Widget _buildStatsGrid(bool isDesktop, WidgetRef ref) {
+    final tripsAsync = ref.watch(tripsStreamProvider);
+
+    String avgSafety = '—';
+    String totalTrips = '—';
+
+    tripsAsync.whenData((trips) {
+      if (trips.isNotEmpty) {
+        final avg = trips.fold<int>(0, (s, t) => s + t.riskScore) ~/ trips.length;
+        avgSafety = '$avg%';
+      }
+      totalTrips = '${trips.length}';
+    });
+
     final cards = [
-      const StatCard(
+      StatCard(
           icon: Icons.shield,
           label: 'Avg Trip Safety',
-          value: '91%',
+          value: avgSafety,
           colorType: 'safe'),
       const StatCard(
           icon: Icons.trending_up,
           label: 'Monthly Risk Exposure',
           value: 'Low',
           colorType: 'primary'),
-      const StatCard(
+      StatCard(
           icon: Icons.location_on,
-          label: 'Areas Analyzed',
-          value: '47',
+          label: 'Total Trips',
+          value: totalTrips,
           colorType: 'warning'),
       const StatCard(
           icon: Icons.bar_chart,
@@ -265,8 +280,8 @@ class AnalyticsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.people, size: 16),
               SizedBox(width: 8),
               Text('Crowd Heatmap by Stop',
@@ -346,8 +361,8 @@ class AnalyticsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.access_time, size: 16),
               SizedBox(width: 8),
               Text('Route Delay Ranking',

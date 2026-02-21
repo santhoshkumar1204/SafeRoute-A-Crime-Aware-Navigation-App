@@ -132,11 +132,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               hintText: 'you@example.com',
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty) {
+                              if (v == null || v.trim().isEmpty) {
                                 return 'Email is required';
                               }
-                              if (!v.contains('@')) {
-                                return 'Enter a valid email';
+                              final emailRegex = RegExp(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$');
+                              if (!emailRegex.hasMatch(v.trim())) {
+                                return 'Enter a valid email (e.g. user@gmail.com)';
                               }
                               return null;
                             },
@@ -167,6 +168,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             validator: (v) {
                               if (v == null || v.isEmpty) {
                                 return 'Password is required';
+                              }
+                              if (v.length < 6) {
+                                return 'Password must be at least 6 characters';
                               }
                               return null;
                             },

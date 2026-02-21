@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
-import '../../data/mock_data.dart';
+import '../../providers/firebase_providers.dart';
 
 class NotificationPanel extends ConsumerStatefulWidget {
   const NotificationPanel({super.key});
@@ -12,49 +13,64 @@ class NotificationPanel extends ConsumerStatefulWidget {
 
 class _NotificationPanelState extends ConsumerState<NotificationPanel> {
   bool _open = false;
-  late List<Map<String, dynamic>> _alerts;
+  final Set<String> _locallyRead = {};
+  bool _cleared = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _alerts = MockData.alerts
-        .map((a) => <String, dynamic>{
-            'id': a.id,
-            'message': a.message,
-            'type': a.type,
-            'time': a.time,
-            'read': a.read,
-          })
-        .toList();
-  }
-
-  int get _unreadCount => _alerts.where((a) => !(a['read'] as bool)).length;
+  int _unreadCount(List<Map<String, dynamic>> alerts) =>
+      alerts.where((a) => !(a['read'] as bool)).length;
 
   void _markRead(String id) {
-    setState(() {
-      final idx = _alerts.indexWhere((a) => a['id'] == id);
-      if (idx != -1) _alerts[idx]['read'] = true;
-    });
+    setState(() => _locallyRead.add(id));
   }
 
-  void _markAllRead() {
+  void _markAllRead(List<Map<String, dynamic>> alerts) {
     setState(() {
-      for (final a in _alerts) {
-        a['read'] = true;
+      for (final a in alerts) {
+        _locallyRead.add(a['id'] as String);
       }
     });
   }
 
   void _clearAll() {
-    setState(() => _alerts.clear());
+    setState(() => _cleared = true);
   }
 
   void _togglePanel() {
     setState(() => _open = !_open);
   }
 
+  String _formatTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return DateFormat('MMM d').format(dt);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final alertsAsync = ref.watch(alertsStreamProvider);
+
+    final alerts = alertsAsync.when<List<Map<String, dynamic>>>(
+      loading: () => [],
+      error: (_, __) => [],
+      data: (list) => list
+          .map((a) => <String, dynamic>{
+                'id': a.id,
+                'message': a.message,
+                'type': a.severity == 'danger'
+                    ? 'danger'
+                    : a.severity == 'warning'
+                        ? 'warning'
+                        : 'info',
+                'time': _formatTime(a.timestamp),
+                'read': a.read || _locallyRead.contains(a.id),
+              })
+          .toList(),
+    );
+
+    final displayAlerts = _cleared ? <Map<String, dynamic>>[] : alerts;
+    final unread = _unreadCount(displayAlerts);
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -65,7 +81,7 @@ class _NotificationPanelState extends ConsumerState<NotificationPanel> {
             clipBehavior: Clip.none,
             children: [
               const Icon(Icons.notifications_outlined, size: 22),
-              if (_unreadCount > 0)
+              if (unread > 0)
                 Positioned(
                   top: -4,
                   right: -4,
@@ -78,7 +94,7 @@ class _NotificationPanelState extends ConsumerState<NotificationPanel> {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      '$_unreadCount',
+                      '$unread',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 9,
@@ -125,7 +141,7 @@ class _NotificationPanelState extends ConsumerState<NotificationPanel> {
                           ),
                           const Spacer(),
                           GestureDetector(
-                            onTap: _markAllRead,
+                            onTap: () => _markAllRead(displayAlerts),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -169,7 +185,7 @@ class _NotificationPanelState extends ConsumerState<NotificationPanel> {
 
                     // Alerts list
                     Flexible(
-                      child: _alerts.isEmpty
+                      child: displayAlerts.isEmpty
                           ? const Padding(
                               padding: EdgeInsets.all(24),
                               child: Text(
@@ -183,11 +199,11 @@ class _NotificationPanelState extends ConsumerState<NotificationPanel> {
                           : ListView.separated(
                               shrinkWrap: true,
                               padding: EdgeInsets.zero,
-                              itemCount: _alerts.length,
+                              itemCount: displayAlerts.length,
                               separatorBuilder: (_, __) =>
                                   const Divider(height: 1),
                               itemBuilder: (context, index) {
-                                final alert = _alerts[index];
+                                final alert = displayAlerts[index];
                                 final isRead = alert['read'] as bool;
                                 final type = alert['type'] as String;
                                 Color dotColor;
