@@ -1,0 +1,48 @@
+import 'package:google_sign_in/google_sign_in.dart';
+import '../models/user_model.dart';
+
+class GoogleAuthService {
+  static final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
+
+  /// Returns the currently signed-in Google account, if any.
+  static GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
+
+  /// Sign in with Google.
+  /// Returns a [UserModel] on success, throws on failure.
+  static Future<UserModel> signIn() async {
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        throw Exception('Google sign-in was cancelled');
+      }
+
+      return UserModel(
+        name: account.displayName ?? account.email.split('@').first,
+        email: account.email,
+        role: 'User',
+      );
+    } catch (e) {
+      throw Exception('Google sign-in failed: $e');
+    }
+  }
+
+  /// Sign out from Google.
+  static Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {
+      // Ignore sign-out errors
+    }
+  }
+
+  /// Disconnect (revoke access).
+  static Future<void> disconnect() async {
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {
+      // Ignore disconnect errors
+    }
+  }
+}
