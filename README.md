@@ -1,7 +1,3 @@
-<div align="center">
-	<img src="https://placehold.co/600x150?text=SafeRoute+Logo" alt="SafeRoute Logo" width="60%"/>
-</div>
-
 # SafeRoute – Crime-Aware Public Transport Navigation
 
 > **Enhancing Public Transport Safety Using AI & TN MTC Data**
@@ -138,5 +134,69 @@ flowchart TD
     B -->|Response| A
 
 
+---
 
+## 🔄 Application Flow
+
+1. User selects destination and preferred MTC bus route.  
+2. TN MTC route and stop data are retrieved from Firebase.  
+3. Crime data for surrounding walking segments is fetched.  
+4. XGBoost model predicts risk scores.  
+5. Risk-weighted engine computes the safest combined journey.  
+6. Flutter app renders the optimized route with safety overlays and real-time alerts.  
+
+---
+
+## 🧪 ML Model Setup
+
+### Structure
+
+- `models/` → Trained XGBoost artifacts  
+- `train_model.py` → End-to-end training pipeline  
+- `backend/` → Real-time inference integration  
+- `requirements.txt` → Python dependencies  
+
+---
+
+### Setup & Training
+
+```bash
+pip install -r requirements.txt
+python train_model.py
+
+---
+
+## 📁 Project Structure
+
+```text
+SafeRoute/
+├── flutter_app/          # Flutter mobile application
+├── backend/              # Python backend service
+├── models/               # Trained ML artifacts
+├── datasets/             # Crime & transport data (local only)
+├── train_model.py        # ML training script
+├── requirements.txt
+└── README.md
+
+## 📡 Core API Endpoints
+
+| Method | Endpoint            | Description                         |
+|--------|--------------------|-------------------------------------|
+| GET    | /api/safest-route  | Returns safest optimized commute    |
+| GET    | /api/hotspots      | Returns AI heatmap data             |
+| GET    | /api/safe-stops    | Returns ranked bus stops            |
+| POST   | /api/report        | Submit safety incident              |
+
+---
+
+## 🌍 Societal Impact
+
+SafeRoute enhances TN MTC public transport by:
+
+- Increasing commuter confidence  
+- Reducing exposure to unsafe zones  
+- Encouraging public transport adoption  
+- Supporting safer urban mobility ecosystems  
+
+By combining transport intelligence with predictive safety analytics, SafeRoute transforms public transit into a smarter, data-driven, and safer commuting experience.
 
