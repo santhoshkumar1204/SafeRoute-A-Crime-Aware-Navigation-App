@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/map_widget.dart';
-import '../../data/mock_data.dart';
 import '../../providers/app_state_provider.dart';
 
 class _TransportMode {
@@ -365,11 +364,10 @@ class _NavigationPageState extends ConsumerState<NavigationPage> {
           const SizedBox(height: 12),
 
           // Route Risk Score
-          _buildRouteRiskScore(),
-          const SizedBox(height: 12),
+          // Disabled until wired to backend
 
           // Stop Intelligence (bus only)
-          if (_transport == 'bus') _buildStopIntelligence(),
+          // Disabled to avoid showing mock data
         ],
       ),
     );
@@ -404,223 +402,11 @@ class _NavigationPageState extends ConsumerState<NavigationPage> {
   }
 
   Widget _buildRouteRiskScore() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Route Risk Score',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.safe.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  '72%',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.safe,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Moderate-Safe',
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500)),
-                  Text('ETA: 18 min · 3.2 km',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.mutedForeground)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.muted.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('🤖 AI Insight',
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w500)),
-                SizedBox(height: 4),
-                Text(
-                  'This route avoids 3 high-risk zones and follows well-lit streets. Risk is lowest until 10 PM.',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.mutedForeground),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildStopIntelligence() {
-    final stops = MockData.stopSafety.take(3).toList();
-    final crowd = MockData.crowdData.take(3).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.directions_bus, size: 16, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text('Stop Intelligence',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...stops.map((s) => Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.muted.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: s.safety >= 80
-                            ? AppColors.safe
-                            : s.safety >= 60
-                                ? AppColors.warning
-                                : AppColors.danger,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(s.stop,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w500)),
-                    ),
-                    if (s.cctv)
-                      Container(
-                        margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('CCTV',
-                            style: TextStyle(
-                                fontSize: 9, color: AppColors.primary)),
-                      ),
-                    if (s.police)
-                      Container(
-                        margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.safe.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text('Police',
-                            style: TextStyle(
-                                fontSize: 9, color: AppColors.safe)),
-                      ),
-                    Text(
-                      '${s.safety}%',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: s.safety >= 80
-                            ? AppColors.safe
-                            : s.safety >= 60
-                                ? AppColors.warning
-                                : AppColors.danger,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-
-          const SizedBox(height: 8),
-          const Divider(),
-          const SizedBox(height: 8),
-
-          const Row(
-            children: [
-              Icon(Icons.people, size: 14, color: AppColors.foreground),
-              SizedBox(width: 4),
-              Text('Crowd Levels',
-                  style:
-                      TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...crowd.map((c) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(c.stop,
-                        style: const TextStyle(fontSize: 11)),
-                    Text(
-                      '${c.percent}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: c.level == 'high'
-                            ? AppColors.danger
-                            : c.level == 'moderate'
-                                ? AppColors.warning
-                                : AppColors.safe,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildMapSection() {
@@ -633,64 +419,6 @@ class _NavigationPageState extends ConsumerState<NavigationPage> {
             showPoliceStations: true,
           ),
         ),
-        if (_navigating) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.danger.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: AppColors.danger.withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.warning_amber,
-                              size: 16, color: AppColors.danger),
-                          SizedBox(width: 4),
-                          Text(
-                            'High Risk Zone Ahead',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.danger,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Consider rerouting via Oak Street',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.mutedForeground),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                  child: const Text('Reroute'),
-                ),
-              ],
-            ),
-          ),
-        ],
       ],
     );
   }

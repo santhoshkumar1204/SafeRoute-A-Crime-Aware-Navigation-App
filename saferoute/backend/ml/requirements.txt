@@ -1,0 +1,9 @@
+# requirements for SafeRoute ML model
+
+# Example dependencies
+scikit-learn
+pandas
+numpy
+joblib
+# Add any other required packages below
+

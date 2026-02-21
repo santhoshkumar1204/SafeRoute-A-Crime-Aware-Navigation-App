@@ -14,7 +14,8 @@ class MapState {
     this.showPoliceStations = false,
   });
 
-  MapState copyWith({bool? showHeatmap, bool? showRoute, bool? showPoliceStations}) {
+  MapState copyWith(
+      {bool? showHeatmap, bool? showRoute, bool? showPoliceStations}) {
     return MapState(
       showHeatmap: showHeatmap ?? this.showHeatmap,
       showRoute: showRoute ?? this.showRoute,
@@ -26,12 +27,15 @@ class MapState {
 class MapNotifier extends StateNotifier<MapState> {
   MapNotifier() : super(const MapState());
 
-  void toggleHeatmap() => state = state.copyWith(showHeatmap: !state.showHeatmap);
+  void toggleHeatmap() =>
+      state = state.copyWith(showHeatmap: !state.showHeatmap);
   void toggleRoute() => state = state.copyWith(showRoute: !state.showRoute);
-  void togglePoliceStations() => state = state.copyWith(showPoliceStations: !state.showPoliceStations);
+  void togglePoliceStations() =>
+      state = state.copyWith(showPoliceStations: !state.showPoliceStations);
 }
 
-final mapProvider = StateNotifierProvider<MapNotifier, MapState>((ref) => MapNotifier());
+final mapProvider =
+    StateNotifierProvider<MapNotifier, MapState>((ref) => MapNotifier());
 
 // Route State
 class RouteState {
@@ -45,8 +49,8 @@ class RouteState {
     this.source = '',
     this.destination = '',
     this.mode = 'safest',
-    this.riskProbability = 0.32,
-    this.riskLevel = 'low',
+    this.riskProbability = 0.0,
+    this.riskLevel = 'unknown',
   });
 
   RouteState copyWith({
@@ -74,7 +78,8 @@ class RouteNotifier extends StateNotifier<RouteState> {
   void setMode(String m) => state = state.copyWith(mode: m);
 }
 
-final routeProvider = StateNotifierProvider<RouteNotifier, RouteState>((ref) => RouteNotifier());
+final routeProvider =
+    StateNotifierProvider<RouteNotifier, RouteState>((ref) => RouteNotifier());
 
 // Risk State (read-only dashboard stats)
 class RiskState {
@@ -84,10 +89,10 @@ class RiskState {
   final int tripsThisWeek;
 
   const RiskState({
-    this.todaySafetyScore = 87,
-    this.nearbyHighRiskAreas = 3,
-    this.recentAlerts = 5,
-    this.tripsThisWeek = 12,
+    this.todaySafetyScore = 0,
+    this.nearbyHighRiskAreas = 0,
+    this.recentAlerts = 0,
+    this.tripsThisWeek = 0,
   });
 }
 
@@ -95,13 +100,15 @@ final riskProvider = Provider<RiskState>((ref) => const RiskState());
 
 // Notification State
 class NotificationNotifier extends StateNotifier<List<NotificationModel>> {
-  NotificationNotifier() : super(MockData.notifications);
+  NotificationNotifier() : super([]);
 
   int get unreadCount => state.where((n) => !n.read).length;
 
   void markAllRead() {
     state = [
-      for (final n in state) NotificationModel(id: n.id, message: n.message, time: n.time, read: true),
+      for (final n in state)
+        NotificationModel(
+            id: n.id, message: n.message, time: n.time, read: true),
     ];
   }
 
