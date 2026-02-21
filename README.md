@@ -190,15 +190,14 @@ By combining transport intelligence with predictive safety analytics, SafeRoute 
 
 ```mermaid
 flowchart TD
-    A[Flutter App] -->|Route Request| B[Python Backend]
-    B -->|Fetch TN MTC Data| C[Firebase Firestore]
+    A["Flutter App"] -->|Route Request| B["Python Backend"]
+    B -->|Fetch TN MTC Data| C["Firebase Firestore"]
     B -->|Fetch Crime Data| C
-    B -->|Predict Risk| D[XGBoost Model]
+    B -->|Predict Risk| D["XGBoost Model"]
     D -->|Risk Scores| B
-    B -->|Risk-Weighted Graph| E[Dijkstra / A* Engine]
+    B -->|Risk-Weighted Graph| E["Dijkstra / A-Star Engine"]
     E -->|Optimized Safe Route| B
     B -->|Response| A
-```
 
 
 
